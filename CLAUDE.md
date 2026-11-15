@@ -29,5 +29,6 @@ A command bar assistant. Today it is only the command bar: no database, no AI ye
 - `npm run dev`: start the app at http://localhost:3000
 - `npm run lint`: ESLint
 - `npm run typecheck`: generate Next route types, then `tsc --noEmit`
+- `npm run test:e2e`: Playwright browser tests in `e2e/` (Chromium). Reuses a running dev server, or starts one. First time: `npx playwright install chromium`
 
-CI (`.github/workflows/ci.yml`) runs lint and typecheck on every push.
+CI (`.github/workflows/ci.yml`) runs lint and typecheck, and in a second job the browser tests against a production build, on every push.
