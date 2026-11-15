@@ -9,6 +9,7 @@ A command bar assistant. Today it is only the command bar: no database, no AI ye
 - **Explain first.** Before building something important, explain the idea in plain words: what it is, why it's needed, how it works. Then build it.
 - **One small step at a time.** Finish one step, check it works, then start the next. Don't bundle unrelated changes.
 - **API keys only in `.env.local`.** Never in code, config, commits or chat. `.env*` is gitignored; keep it that way.
+- **Database: Postgres on Neon, through Prisma** (`prisma/schema.prisma`). Never edit a migration that has run; add a new one. The real database only gets `prisma migrate deploy`. Anything that empties tables runs through `scripts/with-test-db.mjs`, which points it at `TEST_DATABASE_URL` and refuses if that is the real database.
 - **Commit messages describe the change.** Never "Day N" or other progress counters.
 
 ## Stack
@@ -29,6 +30,8 @@ A command bar assistant. Today it is only the command bar: no database, no AI ye
 - `npm run dev`: start the app at http://localhost:3000
 - `npm run lint`: ESLint
 - `npm run typecheck`: generate Next route types, then `tsc --noEmit`
+- `npm run db:migrate`: apply migrations to the real database (`DATABASE_URL`). `npm run db:migrate:test`: the same for the test database (`TEST_DATABASE_URL`)
+- `npm run test:api`: Vitest tests in `tests/`, calling the API route handlers against the test database. Run `npm run db:migrate:test` first whenever a migration is added. From Windows, run it in PowerShell: Git Bash hands Node a lowercase drive letter and Vitest then loads twice
 - `npm run test:e2e`: Playwright browser tests in `e2e/` (Chromium). Reuses a running dev server, or starts one. First time: `npx playwright install chromium`
 
-CI (`.github/workflows/ci.yml`) runs lint and typecheck, and in a second job the browser tests against a production build, on every push.
+CI (`.github/workflows/ci.yml`) runs three jobs on every push: lint and typecheck; the API tests against a throwaway Postgres 18 container; and the browser tests against a production build.
