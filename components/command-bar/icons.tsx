@@ -65,4 +65,14 @@ function NotesIcon(props: IconProps) {
   )
 }
 
-export { BellIcon, CalendarIcon, NoteAddIcon, NotesIcon, SearchIcon }
+function CalendarAddIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" />
+      <path d="M2.5 6.5h11M5.5 2v3M10.5 2v3" />
+      <path d="M8 8.5v3M6.5 10h3" />
+    </Icon>
+  )
+}
+
+export { BellIcon, CalendarIcon, NoteAddIcon, NotesIcon, SearchIcon, CalendarAddIcon }
