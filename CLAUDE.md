@@ -20,6 +20,7 @@ A command bar assistant. Today it is only the command bar: no database, no AI ye
 ## Design rules
 
 - Keyboard-first, fast, and beautiful. Not a generic AI dashboard.
+- Visual direction: **Index card**. A white card on a cool desk, navy ink, faint ruled lines, a red line under the search, Atkinson Hyperlegible Next. The chosen row gets a light tint across the whole row plus a highlighter stroke on its words. Colour tokens live in `app/globals.css`, with a dark variant.
 - The command bar opens and closes with **no animation**: people do it many times a day.
 - All other motion follows Emil Kowalski's rules (the `emil-design-eng` skill).
 

@@ -1,26 +1,56 @@
+@layer ui-sdk;
+
 @import "tailwindcss";
 
+/* Index card: a white card on a cool desk, navy ink, ruled lines, a red header line, a highlighter. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --desk: #e6eaf0;
+  --card: #ffffff;
+  --ink: #1c2436;
+  --hint: #5b6478;
+  --rule: #d5e0ef;
+  --red-line: #d64541;
+  --marker: #ffe57a;
+  --row-tint: #fff7d6;
+  --veil: rgb(28 36 54 / 0.14);
+  --card-shadow: 0 1px 0 rgb(28 36 54 / 0.05), 0 24px 48px -20px rgb(28 36 54 / 0.45);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --desk: #10151f;
+    --card: #1a2130;
+    --ink: #eef1f6;
+    --hint: #9aa4b8;
+    --rule: #2a3447;
+    --red-line: #f0625c;
+    --marker: rgb(255 214 102 / 0.3);
+    --row-tint: rgb(255 214 102 / 0.08);
+    --veil: rgb(0 0 0 / 0.4);
+    --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.04), 0 24px 48px -16px rgb(0 0 0 / 0.7);
+    color-scheme: dark;
   }
 }
 
+@theme inline {
+  --color-desk: var(--desk);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-hint: var(--hint);
+  --color-rule: var(--rule);
+  --color-red-line: var(--red-line);
+  --color-row-tint: var(--row-tint);
+  --color-veil: var(--veil);
+  --shadow-card: var(--card-shadow);
+  --font-sans: var(--font-atkinson), system-ui, sans-serif;
+}
+
+/* A highlighter stroke behind the words, leaving a little paper above and below. */
+@utility highlighter {
+  background-image: linear-gradient(transparent 12%, var(--marker) 12% 88%, transparent 88%);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--desk);
+  color: var(--ink);
 }
