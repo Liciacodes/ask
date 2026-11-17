@@ -2,7 +2,7 @@
 
 # Ask
 
-A command bar assistant. Today: the command bar, and reminders created from it and saved in Postgres. No AI yet.
+A command bar assistant. Today: the command bar, reminders created from it and saved in Postgres, and an agent in the bar: type a sentence no command matches, Ask it, and approve each action on a preview card.
 
 ## How to work here
 
@@ -10,6 +10,9 @@ A command bar assistant. Today: the command bar, and reminders created from it a
 - **One small step at a time.** Finish one step, check it works, then start the next. Don't bundle unrelated changes.
 - **API keys only in `.env.local`.** Never in code, config, commits or chat. `.env*` is gitignored; keep it that way.
 - **Database: Postgres on Neon, through Prisma** (`prisma/schema.prisma`). Never edit a migration that has run; add a new one. The real database only gets `prisma migrate deploy`. Anything that empties tables runs through `scripts/with-test-db.mjs`, which points it at `TEST_DATABASE_URL` and refuses if that is the real database.
+- **The agent never acts without an OK.** Every tool that changes something has an approval in `toolApproval` (`lib/agent/agent.ts`), and only read-only tools skip it. There is no permanent delete for the agent; cancel can be undone.
+- **Real model calls only when the user says so.** Tests use a fake model (`MockLanguageModelV4` from `ai/test`) and never reach Groq.
+- **`lib/agent-actions.ts` (the tools' zod schemas) is the user's.** Review it and point out problems; don't edit it.
 - **Commit messages describe the change.** Never "Day N" or other progress counters.
 
 ## Stack
@@ -17,6 +20,7 @@ A command bar assistant. Today: the command bar, and reminders created from it a
 - Next.js 16 (App Router), TypeScript, Tailwind CSS 4. See AGENTS.md: read `node_modules/next/dist/docs/` before writing Next.js code.
 - UI SDK (`@ui-sdk/react`, `@ui-sdk/core`), in beta and pinned to an exact version. Before using it, follow the `ui-sdk` skill (`.claude/skills/ui-sdk`) and read `node_modules/@ui-sdk/react/docs/llms.txt`. For our own primitives, search `docs/core.md` by heading and read `docs/rendering.md`.
 - Build UI from UI SDK **behaviors** in `@ui-sdk/core` (`definePrimitive`, `createPopup`, `createListbox`, …), not from ready-made component libraries.
+- AI: Vercel AI SDK 7 (`ai`, `@ai-sdk/groq`, `@ai-sdk/react`), pinned to exact versions. The bar's `useChat` settings live in `lib/agent/client.ts`, shared with the API tests, and the browser tests fake `/api/agent` with `e2e/fake-agent.ts`, in the route's own stream format. Read `node_modules/ai/docs/` before writing AI SDK code: APIs have changed (`toolApproval`, `isStepCount`, `instructions`). The model is Groq's `openai/gpt-oss-120b`, set in `lib/agent/model.ts`, the one line to change to swap providers. It reads `GROQ_API_KEY`, on the server only. The model works in local dates and times; the server converts them (`lib/time.ts`) and checks every action with the API's own schemas (`lib/agent/plans.ts`).
 
 ## Design rules
 

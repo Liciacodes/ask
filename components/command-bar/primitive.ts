@@ -16,6 +16,10 @@ import {
 } from "@ui-sdk/core"
 import { dialogPreset } from "@ui-sdk/core/dialog"
 import { registerShortcut } from "@ui-sdk/core/shortcuts"
+import { matchRanges } from "@ui-sdk/core/text-match"
+
+// The value of the Ask row: it offers to ask about what you typed when no command matches it.
+const ASK = "ask"
 
 type CommandBarOpenReason =
   | "shortcut"
@@ -34,6 +38,7 @@ type CommandBarOptions = {
   defaultOpen?: boolean
   onOpenChange?: (open: boolean, details: ChangeDetails<CommandBarOpenReason>) => void
   onChoose?: (value: string, details: ChangeDetails<"item-press">) => void
+  onAsk?: (question: string, details: ChangeDetails<"item-press">) => void
 }
 
 type CommandBarState = PopupState & {
@@ -50,6 +55,7 @@ const commandBar = definePrimitive({
     defaultOpen: "boolean",
     onOpenChange: "callback",
     onChoose: "callback",
+    onAsk: "callback",
   },
   state: (options: CommandBarOptions): CommandBarState => ({
     ...popupState(options),
@@ -58,10 +64,17 @@ const commandBar = definePrimitive({
   }),
   api: (context) => {
     const popup = createPopup(context, { preset: dialogPreset })
+    const contains = (label: string, query: string) => matchRanges(label, query, "contains").length > 0
+    // Every command's label, so the Ask row can tell whether any of them matches.
+    const labels = new Map<string, string>()
     const listbox = createListbox(context, {
       key: "highlighted",
       focus: "virtual",
       query: () => context.store.get().query,
+      filter: () => (item, query) =>
+        item.value === ASK
+          ? query.trim() !== "" && ![...labels.values()].some((label) => contains(label, query))
+          : contains(item.label, query),
     })
 
     let wasOpen = context.store.get().open
@@ -86,6 +99,12 @@ const commandBar = definePrimitive({
 
     const choose = (value: string | null, event?: Event) => {
       if (value === null) return
+      if (value === ASK) {
+        dispatch(context, "onAsk", context.store.get().query.trim(), { reason: "item-press", event })
+        // The question moves into the conversation, so the list is fresh when you come back to it.
+        search("", event)
+        return
+      }
       if (dispatch(context, "onChoose", value, { reason: "item-press", event })) return
       popup.close({ reason: "item-press", event })
     }
@@ -99,7 +118,7 @@ const commandBar = definePrimitive({
       if (listbox.keydown(event) !== undefined) event.preventDefault()
     }
 
-    return { ...popup, listbox, shortcut, search, choose, keydown }
+    return { ...popup, listbox, labels, shortcut, search, choose, keydown }
   },
   slots: (slot) => ({
     root: slot({
@@ -151,12 +170,14 @@ const commandBar = definePrimitive({
       keys: { none: "The search input handles them, with aria-activedescendant." },
       attrs: (_state, part) => ({ id: `${part.id}-list`, "aria-label": "Commands" }),
     }),
-    item: slot<{ value: string; label?: string }>({
+    item: slot<{ value: string; label?: string }, { query: string }>({
       role: "option",
       focus: "active-descendant",
       props: { value: "string", label: "string" },
+      state: (state) => ({ query: state.query.trim() }),
       selects: selects({ highlighted: ({ key }) => [key, null] }),
-      present: (_state, part) => part.api.listbox.shows(part),
+      // An empty search shows every option without filtering, so the Ask row waits for something to ask about.
+      present: (state, part) => part.api.listbox.shows(part) && (part.key !== ASK || state.query.trim() !== ""),
       attrs: (state, part) => ({
         ...part.api.listbox.attrs(state, part),
         "aria-selected": String(state.highlighted === part.key),
@@ -166,7 +187,15 @@ const commandBar = definePrimitive({
         pointerdown: (event) => event.preventDefault(),
         pointermove: (event, { key, api }) => api.listbox.highlight(key, { event }),
       },
-      bind: (el, part) => part.api.listbox.bind(el, part),
+      bind: (el, part) => {
+        const leave = part.api.listbox.bind(el, part)
+        if (part.key === ASK) return leave
+        part.api.labels.set(part.key, part.props.label ?? el.textContent ?? "")
+        return () => {
+          part.api.labels.delete(part.key)
+          leave()
+        }
+      },
     }),
     empty: slot<object, { query: string }>({
       present: (_state, part) => part.api.listbox.count() === 0,
@@ -178,4 +207,4 @@ const commandBar = definePrimitive({
 
 const createCommandBarController = () => createController<CommandBarController>()
 
-export { commandBar, createCommandBarController, type CommandBarOptions }
+export { ASK, commandBar, createCommandBarController, type CommandBarOptions }

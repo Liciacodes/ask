@@ -4,15 +4,24 @@ import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { CommandBar, CommandBarShortcut, keycap } from "@/components/command-bar/command-bar";
 import type { Command } from "@/components/command-bar/commands";
-import { cardRects, playArrival } from "@/components/week/arrival";
+import type { Done } from "@/components/command-bar/use-agent";
+import { cardRects, playArrival, playMark } from "@/components/week/arrival";
 import { weekDays, whenOf } from "@/components/week/days";
 import { useWeek } from "@/components/week/use-week";
 import { Week, WeekNote } from "@/components/week/week";
 import type { ReminderJson } from "@/lib/reminders";
 
-type Outcome = { chosen: Command } | { saved: ReminderJson } | null;
+type Outcome = { chosen: Command } | { saved: ReminderJson } | { agent: Done } | null;
 
 const marked = "-mx-1 rounded-[2px] px-1 highlighter";
+
+function AgentOutcome({ done, reminder }: Done) {
+  const title = <span className={marked}>{reminder.title}</span>;
+  if (done === "create") return <>Saved {title} for {whenOf(reminder)}</>;
+  if (done === "change") return <>Changed {title}, now {whenOf(reminder)}</>;
+  if (done === "cancel") return <>Cancelled {title}</>;
+  return <>Brought back {title} for {whenOf(reminder)}</>;
+}
 
 // The server can't know the reader's timezone or today's date there, so the week renders once the browser can say.
 let browser: { timezone: string; now: Date } | undefined;
@@ -25,19 +34,30 @@ export default function Home() {
   const here = useSyncExternalStore(neverChanges, readBrowser, nothingOnServer);
   const timezone = here?.timezone ?? null;
   const week = here ? weekDays(here.now, here.timezone) : null;
-  const { state, retry, add } = useWeek(timezone);
+  const { state, retry, put } = useWeek(timezone);
   const [newest, setNewest] = useState<string | null>(null);
   const weekList = useRef<HTMLOListElement>(null);
   const arriving = useRef<{ id: string; from: DOMRect; before: ReturnType<typeof cardRects> } | null>(null);
+  const marking = useRef<string | null>(null);
   const stopArrival = useRef<(() => void) | null>(null);
 
-  // Once the new card is in the week, fly it in, before the browser paints the week with it.
+  // Once the new card is in the week, fly it in (or, from a conversation, mark it) before the browser paints it.
   useLayoutEffect(() => {
     const arrival = arriving.current;
-    if (!arrival || !weekList.current) return;
-    arriving.current = null;
-    stopArrival.current = playArrival({ week: weekList.current, ...arrival });
+    const mark = marking.current;
+    if (!weekList.current) return;
+    if (arrival) {
+      arriving.current = null;
+      stopArrival.current = playArrival({ week: weekList.current, ...arrival });
+    } else if (mark) {
+      marking.current = null;
+      stopArrival.current?.();
+      stopArrival.current = playMark({ week: weekList.current, id: mark });
+    }
   }, [state]);
+
+  const inThisWeek = (reminder: ReminderJson) =>
+    week !== null && reminder.due_at >= week.from.toISOString() && reminder.due_at < week.to.toISOString();
 
   const shortcut = <CommandBarShortcut className={`${keycap} min-w-11 text-[12px]`} />;
 
@@ -46,8 +66,8 @@ export default function Home() {
       <CommandBar
         onChoose={(chosen) => setOutcome({ chosen })}
         onReminderSaved={(saved, from) => {
-          const inThisWeek = week && saved.due_at >= week.from.toISOString() && saved.due_at < week.to.toISOString();
-          if (inThisWeek && weekList.current) {
+          const flies = inThisWeek(saved);
+          if (flies && weekList.current) {
             stopArrival.current?.();
             arriving.current = { id: saved.id, from, before: cardRects(weekList.current) };
           }
@@ -55,11 +75,21 @@ export default function Home() {
           // Render now, so the card flies in the same moment the bar starts to fade.
           flushSync(() => {
             setOutcome({ saved });
-            if (inThisWeek) {
+            if (flies) {
               setNewest(saved.id);
-              add(saved);
+              put(saved, true);
             }
           });
+        }}
+        onAgentDone={(result) => {
+          // A cancelled reminder leaves the week; anything else shows on its day, if that day is this week.
+          const shows = result.reminder.status !== "cancelled" && inThisWeek(result.reminder);
+          setOutcome({ agent: result });
+          put(result.reminder, shows);
+          if (shows) {
+            setNewest(result.reminder.id);
+            marking.current = result.reminder.id;
+          }
         }}
         className="flex flex-1 flex-col"
       >
@@ -86,6 +116,7 @@ export default function Home() {
                   Saved <span className={marked}>{outcome.saved.title}</span> for {whenOf(outcome.saved)}
                 </>
               )}
+              {outcome && "agent" in outcome && <AgentOutcome {...outcome.agent} />}
             </p>
             {week && (
               <WeekNote

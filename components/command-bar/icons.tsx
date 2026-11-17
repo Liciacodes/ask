@@ -83,4 +83,13 @@ function CheckIcon(props: IconProps) {
   )
 }
 
-export { BellIcon, CalendarIcon, CheckIcon, NoteAddIcon, NotesIcon, SearchIcon, CalendarAddIcon }
+function AskIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M3.5 3h9a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H8l-3 2.5V11H3.5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+      <path d="M5.5 6h5M5.5 8h3" />
+    </Icon>
+  )
+}
+
+export { AskIcon, BellIcon, CalendarIcon, CheckIcon, NoteAddIcon, NotesIcon, SearchIcon, CalendarAddIcon }

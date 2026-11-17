@@ -51,19 +51,26 @@ test("typing filters the list, and deleting the text brings everything back", as
   await expectHighlighted(page, commands(page).first())
 })
 
-test("a search with no matches says so, and Enter does nothing", async ({ page }) => {
+test("a search no command matches offers to ask instead", async ({ page }) => {
   await openBar(page)
 
   await page.keyboard.type("zzz")
 
-  await expect(commands(page)).toHaveCount(0)
-  await expect(page.getByText("No commands match “zzz”")).toBeVisible()
-  await expect(search(page)).not.toHaveAttribute("aria-activedescendant")
+  await expect(commands(page)).toHaveCount(1)
+  await expectHighlighted(page, command(page, "Ask “zzz”"))
+  await expect(page.getByText(/No commands match/)).toHaveCount(0)
+})
 
-  await page.keyboard.press("Enter")
+test("asking isn't offered until you type something, and spaces don't count", async ({ page }) => {
+  await openBar(page)
+  const all = await commands(page).count()
+  await expect(page.getByRole("option", { name: /^Ask/ })).toHaveCount(0)
 
-  await expect(bar(page)).toBeVisible()
-  await expect(status(page)).toBeEmpty()
+  await page.keyboard.type("   ")
+
+  await expect(commands(page)).toHaveCount(all)
+  await expect(page.getByRole("option", { name: /^Ask/ })).toHaveCount(0)
+  await expectHighlighted(page, commands(page).first())
 })
 
 test("Enter chooses the highlighted command, closes the bar and puts focus back", async ({ page }) => {

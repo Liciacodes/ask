@@ -26,12 +26,18 @@ function useWeek(timezone: string | null) {
     setAttempt((count) => count + 1)
   }
 
-  const add = (reminder: ReminderJson) => {
+  // Puts a reminder in the week, replacing its old copy, or takes it out when it no longer belongs there.
+  // Before the week has loaded there's nothing to change, so the week loads again and arrives with it.
+  const put = (reminder: ReminderJson, inWeek: boolean) => {
     if (state.status !== "ready") return retry()
-    setState({ status: "ready", reminders: [...state.reminders, reminder] })
+    setState((current) => {
+      if (current.status !== "ready") return current
+      const others = current.reminders.filter((other) => other.id !== reminder.id)
+      return { status: "ready", reminders: inWeek ? [...others, reminder] : others }
+    })
   }
 
-  return { state, retry, add }
+  return { state, retry, put }
 }
 
 export { useWeek, type WeekState }

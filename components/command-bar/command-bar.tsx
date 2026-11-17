@@ -4,9 +4,11 @@ import { createParts } from "@ui-sdk/react/primitive"
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import type { ReminderJson } from "@/lib/reminders"
 import { commands, type Command } from "./commands"
-import { BellIcon, SearchIcon } from "./icons"
-import { commandBar, createCommandBarController } from "./primitive"
+import { Conversation, wording } from "./conversation"
+import { AskIcon, BellIcon, SearchIcon } from "./icons"
+import { ASK, commandBar, createCommandBarController } from "./primitive"
 import { ReminderForm } from "./reminder-form"
+import { useAgent, type Agent, type Done } from "./use-agent"
 import { playSwap, snapshot, type Snapshot } from "./view-swap"
 
 const parts = createParts(commandBar, {
@@ -25,6 +27,8 @@ const parts = createParts(commandBar, {
 const keycap =
   "inline-grid min-w-5 place-items-center rounded-[4px] border border-b-2 border-rule bg-card px-1.5 py-1 font-sans text-[11.5px] leading-none font-medium text-ink"
 
+type Hint = readonly [keys: readonly string[], action: string]
+
 const hints = {
   list: [
     [["↑", "↓"], "move"],
@@ -36,21 +40,43 @@ const hints = {
     [["tab"], "next field"],
     [["esc"], "back"],
   ],
-} as const
+} satisfies Record<string, Hint[]>
 
-type View = keyof typeof hints
+type View = keyof typeof hints | "conversation"
+
+// What Enter and Esc do right now in the conversation. Nothing while an action you approved is running.
+function conversationHints(agent: Agent): Hint[] {
+  if (agent.waiting) {
+    const words = wording[agent.waiting.preview.action]
+    return [
+      [["↵"], words.approve.toLowerCase()],
+      [["esc"], words.decline.toLowerCase()],
+    ]
+  }
+  if (agent.saving) return []
+  if (agent.busy) return [[["esc"], "stop"]]
+  return [
+    [["↵"], "send"],
+    [["esc"], "back"],
+  ]
+}
 
 type CommandBarProps = {
   // `from` is where the bar's card was on screen, for the saved reminder to fly from.
   onReminderSaved?: (reminder: ReminderJson, from: DOMRect) => void
+  // An action you approved in a conversation, once the server has carried it out.
+  onAgentDone?: (done: Done) => void
   onChoose?: (command: Command) => void
   children?: ReactNode
   className?: string
 }
 
-function CommandBar({ onChoose, onReminderSaved, children, className }: CommandBarProps) {
+const ignore = () => {}
+
+function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children, className }: CommandBarProps) {
   const [bar] = useState(createCommandBarController)
   const [view, setView] = useState<View>("list")
+  const agent = useAgent(onAgentDone)
   const root = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const paper = useRef<HTMLDivElement>(null)
@@ -94,12 +120,22 @@ function CommandBar({ onChoose, onReminderSaved, children, className }: CommandB
       onOpenChange={(open, details) => {
         if (open) {
           delete root.current?.dataset.closing
+          agent.reset()
           jumpTo("list")
           return
         }
         if (view === "reminder" && details.reason === "escape-key") {
           details.cancel()
           swapTo("list")
+          return
+        }
+        // Esc answers a waiting card with no, stops a reply still arriving, and otherwise goes back to the list.
+        if (view === "conversation" && details.reason === "escape-key") {
+          details.cancel()
+          if (agent.waiting) agent.answer(false)
+          else if (agent.saving) return
+          else if (agent.busy) agent.stop()
+          else swapTo("list")
           return
         }
         // After a save the bar fades out showing the form, so it stays put until the next open.
@@ -113,6 +149,10 @@ function CommandBar({ onChoose, onReminderSaved, children, className }: CommandB
         }
         const command = commands.find((item) => item.value === value)
         if (command) onChoose?.(command)
+      }}
+      onAsk={(question) => {
+        agent.ask(question)
+        swapTo("conversation")
       }}
     >
       {children}
@@ -147,11 +187,27 @@ function CommandBar({ onChoose, onReminderSaved, children, className }: CommandB
                     </span>
                   </parts.Item>
                 ))}
+                <parts.Item
+                  value={ASK}
+                  className="group flex cursor-default items-center gap-3 px-4 py-2.5 text-[15px] data-highlighted:bg-row-tint"
+                >
+                  {({ query }) => (
+                    <>
+                      <AskIcon className="shrink-0 text-hint group-data-highlighted:text-ink" />
+                      <span className="-mx-1 min-w-0 truncate rounded-[2px] px-1 group-data-highlighted:highlighter">Ask “{query}”</span>
+                      <span aria-hidden="true" className="invisible ml-auto text-[13px] text-hint group-data-highlighted:visible">
+                        ↵
+                      </span>
+                    </>
+                  )}
+                </parts.Item>
               </parts.List>
               <parts.Empty className="px-4 py-6 text-[15px] text-hint">
                 {({ query }) => <>No commands match “{query}”</>}
               </parts.Empty>
             </>
+          ) : view === "conversation" ? (
+            <Conversation agent={agent} />
           ) : (
             <>
               <div className="flex h-13 items-center gap-3 border-b-[1.5px] border-red-line px-4">
@@ -170,8 +226,8 @@ function CommandBar({ onChoose, onReminderSaved, children, className }: CommandB
           )}
           </div>
           <div ref={footer} aria-hidden="true" className="border-t border-rule px-4 py-2.5 text-[12.5px] text-hint">
-            <div ref={hintRow} className="flex flex-wrap gap-x-5 gap-y-1.5">
-              {hints[view].map(([keys, action]) => (
+            <div ref={hintRow} className="flex min-h-[22.5px] flex-wrap gap-x-5 gap-y-1.5">
+              {(view === "conversation" ? conversationHints(agent) : hints[view]).map(([keys, action]) => (
                 <span key={action} className="inline-flex items-center gap-1.5">
                   {keys.map((key) => (
                     <kbd key={key} className={keycap}>

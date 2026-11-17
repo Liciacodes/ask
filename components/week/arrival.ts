@@ -36,14 +36,39 @@ function drawHighlighter(marker: HTMLElement, delay = 0) {
   })
 }
 
+const cardIn = (week: HTMLElement, id: string) => week.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`)
+const prefersReduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches
+
+// A card that arrives without a flight fades in where it is, then the highlighter draws across its title.
+function fadeIn(card: HTMLElement, reduced: boolean) {
+  const marker = card.querySelector<HTMLElement>("[data-marker]")
+  const animations = [card.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: EASE_OUT })]
+  if (marker) {
+    animations.push(
+      reduced
+        ? marker.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: EASE_OUT })
+        : drawHighlighter(marker, FADE_MS)
+    )
+  }
+  return animations
+}
+
+// A change from a conversation: the bar stays open over the week, so there's no flight, only the fade and the mark.
+function playMark({ week, id }: { week: HTMLElement; id: string }) {
+  const card = cardIn(week, id)
+  if (!card) return () => {}
+  const animations = fadeIn(card, prefersReduced())
+  return () => animations.forEach((animation) => animation.cancel())
+}
+
 type ArrivalParts = { week: HTMLElement; id: string; from: DOMRect; before: Rects }
 
 function playArrival({ week, id, from, before }: ArrivalParts) {
-  const card = week.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`)
+  const card = cardIn(week, id)
   if (!card) return () => {}
   const marker = card.querySelector<HTMLElement>("[data-marker]")
   const to = card.getBoundingClientRect()
-  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches
+  const reduced = prefersReduced()
   const animations: Animation[] = []
   const stop = () => {
     for (const animation of animations) animation.cancel()
@@ -52,14 +77,7 @@ function playArrival({ week, id, from, before }: ArrivalParts) {
 
   // No flight: under reduced motion, or when the slot is off screen and there's nowhere to watch it land.
   if (reduced || !onScreen(to)) {
-    animations.push(card.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: EASE_OUT }))
-    if (marker) {
-      animations.push(
-        reduced
-          ? marker.animate([{ opacity: 0 }, { opacity: 1 }], { duration: FADE_MS, easing: EASE_OUT })
-          : drawHighlighter(marker, FADE_MS)
-      )
-    }
+    animations.push(...fadeIn(card, reduced))
     return stop
   }
 
@@ -126,4 +144,4 @@ function playArrival({ week, id, from, before }: ArrivalParts) {
   }
 }
 
-export { cardRects, playArrival }
+export { cardRects, playArrival, playMark }

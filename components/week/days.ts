@@ -43,4 +43,12 @@ const timeOf = (reminder: ReminderJson, timeZone: string) =>
 const whenOf = (reminder: ReminderJson) =>
   `${format(new Date(reminder.due_at), reminder.timezone, { weekday: "short", day: "numeric", month: "short" })}, ${timeOf(reminder, reminder.timezone)}`
 
-export { remindersByDay, timeOf, weekDays, whenOf, type Day }
+// A date and time already on the person's clock, like "2026-11-20" and "18:00", in the same words as whenOf.
+function localWhen({ date, time }: { date: string; time: string }) {
+  const [year, month, day] = date.split("-").map(Number)
+  const [hours, minutes] = time.split(":").map(Number)
+  const at = new Date(Date.UTC(year, month - 1, day, hours, minutes))
+  return `${format(at, "UTC", { weekday: "short", day: "numeric", month: "short" })}, ${format(at, "UTC", { timeStyle: "short" })}`
+}
+
+export { localWhen, remindersByDay, timeOf, weekDays, whenOf, type Day }
