@@ -2,7 +2,7 @@
 
 # Ask
 
-A command bar assistant. Today it is only the command bar: no database, no AI yet.
+A command bar assistant. Today: the command bar, and reminders created from it and saved in Postgres. No AI yet.
 
 ## How to work here
 

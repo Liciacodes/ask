@@ -54,4 +54,6 @@ function toJson(reminder: Reminder) {
   }
 }
 
-export { newReminder, reminderChanges, toJson, weekQuery }
+type ReminderJson = ReturnType<typeof toJson>
+
+export { newReminder, reminderChanges, toJson, weekQuery, type ReminderJson }

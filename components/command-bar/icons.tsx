@@ -75,4 +75,12 @@ function CalendarAddIcon(props: IconProps) {
   )
 }
 
-export { BellIcon, CalendarIcon, NoteAddIcon, NotesIcon, SearchIcon, CalendarAddIcon }
+function CheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m3.5 8.5 3 3 6-7" />
+    </Icon>
+  )
+}
+
+export { BellIcon, CalendarIcon, CheckIcon, NoteAddIcon, NotesIcon, SearchIcon, CalendarAddIcon }

@@ -1,40 +1,9 @@
-import { expect, test, type Locator, type Page } from "@playwright/test"
-
-const openShortcut = "ControlOrMeta+k"
+import { expect, test } from "@playwright/test"
+import { addTextField, bar, command, commands, expectHighlighted, goHome, openBar, openShortcut, search, status } from "./helpers"
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/")
-  // Ctrl+K does nothing until React has hydrated, which is also when the shortcut label gets its text.
-  await expect(page.getByText("to open Ask").locator("kbd")).not.toBeEmpty()
+  await goHome(page)
 })
-
-const bar = (page: Page) => page.getByRole("dialog", { name: "Ask" })
-const search = (page: Page) => page.getByRole("combobox")
-const commands = (page: Page) => page.getByRole("option")
-const command = (page: Page, name: string) => page.getByRole("option", { name, exact: true })
-
-async function addTextField(page: Page) {
-  await page.evaluate(() => {
-    const field = document.createElement("input")
-    field.setAttribute("aria-label", "Draft")
-    document.body.prepend(field)
-  })
-  return page.getByRole("textbox", { name: "Draft" })
-}
-
-async function openBar(page: Page) {
-  await page.keyboard.press(openShortcut)
-  await expect(bar(page)).toBeVisible()
-  await expect(search(page)).toBeFocused()
-}
-
-async function expectHighlighted(page: Page, option: Locator) {
-  await expect(option).toHaveAttribute("aria-selected", "true")
-  await expect(page.getByRole("option", { selected: true })).toHaveCount(1)
-  const id = await option.getAttribute("id")
-  expect(id).toBeTruthy()
-  await expect(search(page)).toHaveAttribute("aria-activedescendant", id!)
-}
 
 test("Ctrl+K opens the bar with the cursor in the search box", async ({ page }) => {
   await expect(bar(page)).toBeHidden()
@@ -94,20 +63,20 @@ test("a search with no matches says so, and Enter does nothing", async ({ page }
   await page.keyboard.press("Enter")
 
   await expect(bar(page)).toBeVisible()
-  await expect(page.getByText("Nothing chosen yet")).toBeVisible()
+  await expect(status(page)).toBeEmpty()
 })
 
 test("Enter chooses the highlighted command, closes the bar and puts focus back", async ({ page }) => {
   const field = await addTextField(page)
   await field.click()
-  await expect(page.getByText("Nothing chosen yet")).toBeVisible()
+  await expect(status(page)).toBeEmpty()
 
   await openBar(page)
   await page.keyboard.press("ArrowDown")
   await page.keyboard.press("Enter")
 
   await expect(bar(page)).toBeHidden()
-  await expect(page.getByText("You chose")).toHaveText("You chose Add note")
+  await expect(status(page)).toHaveText("You chose Add note")
   await expect(field).toBeFocused()
 })
 
@@ -123,7 +92,7 @@ test("Escape closes the bar and puts focus back, keeping half-typed text", async
   await expect(bar(page)).toBeHidden()
   await expect(field).toBeFocused()
   await expect(field).toHaveValue("Buy mi")
-  await expect(page.getByText("Nothing chosen yet")).toBeVisible()
+  await expect(status(page)).toBeEmpty()
 
   await page.keyboard.type("lk")
   await expect(field).toHaveValue("Buy milk")
@@ -138,7 +107,7 @@ test("a click outside closes the bar and puts focus back", async ({ page }) => {
 
   await expect(bar(page)).toBeHidden()
   await expect(field).toBeFocused()
-  await expect(page.getByText("Nothing chosen yet")).toBeVisible()
+  await expect(status(page)).toBeEmpty()
 })
 
 test("Ctrl+K again closes the bar and puts focus back", async ({ page }) => {

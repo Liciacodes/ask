@@ -1,4 +1,5 @@
 import {
+  createController,
   createListbox,
   createPopup,
   definePrimitive,
@@ -10,6 +11,7 @@ import {
   popupTitle,
   selects,
   type ChangeDetails,
+  type PopupController,
   type PopupState,
 } from "@ui-sdk/core"
 import { dialogPreset } from "@ui-sdk/core/dialog"
@@ -23,7 +25,10 @@ type CommandBarOpenReason =
   | "focus-out"
   | "imperative"
 
+type CommandBarController = PopupController<unknown, CommandBarOpenReason>
+
 type CommandBarOptions = {
+  controller?: CommandBarController
   shortcut?: string
   open?: boolean
   defaultOpen?: boolean
@@ -39,6 +44,7 @@ type CommandBarState = PopupState & {
 const commandBar = definePrimitive({
   name: "command-bar",
   options: {
+    controller: "value",
     shortcut: "string",
     open: "boolean",
     defaultOpen: "boolean",
@@ -112,6 +118,15 @@ const commandBar = definePrimitive({
     backdrop: popupBackdrop(slot),
     content: popupContent(slot),
     title: popupTitle(slot),
+    // Ctrl+K while open closes the bar, from the search or the form, instead of reaching the browser's address bar.
+    panel: slot({
+      bind: (el, part) =>
+        registerShortcut(
+          () => part.api.shortcut(),
+          (event) => part.api.close({ reason: "shortcut", event }),
+          { layer: el, description: "Close Ask" }
+        ),
+    }),
     input: slot({
       role: "combobox",
       focus: "native",
@@ -130,13 +145,6 @@ const commandBar = definePrimitive({
         input: (event, { api }) => api.search((event.target as HTMLInputElement).value, event),
         keydown: (event, { api }) => api.keydown(event as KeyboardEvent),
       },
-      // Ctrl+K while open closes the bar, instead of falling through to the browser's address bar.
-      bind: (el, part) =>
-        registerShortcut(
-          () => part.api.shortcut(),
-          (event) => part.api.close({ reason: "shortcut", event }),
-          { layer: el, description: "Close Ask" }
-        ),
     }),
     list: slot({
       role: "listbox",
@@ -168,4 +176,6 @@ const commandBar = definePrimitive({
   agent: { actions: ["setOpen", "search", "choose"] },
 })
 
-export { commandBar, type CommandBarOptions }
+const createCommandBarController = () => createController<CommandBarController>()
+
+export { commandBar, createCommandBarController, type CommandBarOptions }

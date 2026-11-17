@@ -10,10 +10,12 @@
   --hint: #5b6478;
   --rule: #d5e0ef;
   --red-line: #d64541;
+  --error: #b8322e;
   --marker: #ffe57a;
   --row-tint: #fff7d6;
   --veil: rgb(28 36 54 / 0.14);
   --card-shadow: 0 1px 0 rgb(28 36 54 / 0.05), 0 24px 48px -20px rgb(28 36 54 / 0.45);
+  --paper-shadow: 0 1px 0 rgb(28 36 54 / 0.06), 0 2px 6px -2px rgb(28 36 54 / 0.22);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,10 +26,12 @@
     --hint: #9aa4b8;
     --rule: #2a3447;
     --red-line: #f0625c;
+    --error: #ff8a84;
     --marker: rgb(255 214 102 / 0.3);
     --row-tint: rgb(255 214 102 / 0.08);
     --veil: rgb(0 0 0 / 0.4);
     --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.04), 0 24px 48px -16px rgb(0 0 0 / 0.7);
+    --paper-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 2px 6px -2px rgb(0 0 0 / 0.6);
     color-scheme: dark;
   }
 }
@@ -39,15 +43,97 @@
   --color-hint: var(--hint);
   --color-rule: var(--rule);
   --color-red-line: var(--red-line);
+  --color-error: var(--error);
   --color-row-tint: var(--row-tint);
   --color-veil: var(--veil);
   --shadow-card: var(--card-shadow);
+  --shadow-paper: var(--paper-shadow);
   --font-sans: var(--font-atkinson), system-ui, sans-serif;
+}
+
+/* The one motion curve: a strong ease-out. Tailwind's ease-out utility and plain CSS both read it. */
+@theme static {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* A highlighter stroke behind the words, leaving a little paper above and below. */
 @utility highlighter {
   background-image: linear-gradient(transparent 12%, var(--marker) 12% 88%, transparent 88%);
+}
+
+/* Faint ruled lines, like a blank index card, so an empty day looks intentional, not missing. */
+@utility ruled {
+  background-image: repeating-linear-gradient(to bottom, transparent 0 31px, var(--rule) 31px 32px);
+}
+
+/* Each part of a date or time is a small input. The focused one gets the highlighter, underlined in ink. */
+:is([data-slot="date-input-segment"], [data-slot="time-input-segment"]) {
+  &[data-type="literal"] {
+    padding-inline: 1px;
+    color: var(--hint);
+    white-space: pre;
+  }
+
+  &:not([data-type="literal"]) {
+    width: calc(2ch + 4px);
+    padding: 0 2px;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: center;
+    caret-color: transparent;
+    outline: none;
+
+    &::placeholder {
+      color: var(--hint);
+    }
+
+    &::selection {
+      background: transparent;
+    }
+
+    &:focus {
+      background: var(--marker);
+      box-shadow: inset 0 -2px var(--ink);
+    }
+  }
+
+  &[data-type="year"] {
+    width: calc(4ch + 4px);
+  }
+
+  &[data-type="dayPeriod"] {
+    width: calc(2.6ch + 4px);
+  }
+}
+
+/* The bar closes instantly, except after a save: then it and its dim layer fade out behind the flying card.
+   UI SDK keeps a leaving popup mounted, marked data-ending-style, until its transitions finish. */
+[data-closing="saved"] [data-bar-layer][data-ending-style] {
+  opacity: 0;
+  transition: opacity 150ms var(--ease-out);
+}
+
+/* A problem eases in under its field: a short fade and a 4px drop. Never a shake. */
+:is([data-slot="field-error"], [data-problem]) {
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+
+  @starting-style {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: opacity 150ms var(--ease-out);
+
+    @starting-style {
+      transform: none;
+    }
+  }
 }
 
 body {
