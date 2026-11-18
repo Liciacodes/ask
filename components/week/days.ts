@@ -43,12 +43,16 @@ const timeOf = (reminder: ReminderJson, timeZone: string) =>
 const whenOf = (reminder: ReminderJson) =>
   `${format(new Date(reminder.due_at), reminder.timezone, { weekday: "short", day: "numeric", month: "short" })}, ${timeOf(reminder, reminder.timezone)}`
 
-// A date and time already on the person's clock, like "2026-11-20" and "18:00", in the same words as whenOf.
+// A date and time already on the person's clock, like "2026-11-21" and "07:00", in the person's language,
+// with the weekday apart so it can stand out: "Saturday" and "21 Nov, 07:00".
 function localWhen({ date, time }: { date: string; time: string }) {
   const [year, month, day] = date.split("-").map(Number)
   const [hours, minutes] = time.split(":").map(Number)
   const at = new Date(Date.UTC(year, month - 1, day, hours, minutes))
-  return `${format(at, "UTC", { weekday: "short", day: "numeric", month: "short" })}, ${format(at, "UTC", { timeStyle: "short" })}`
+  return {
+    weekday: format(at, "UTC", { weekday: "long" }),
+    rest: `${format(at, "UTC", { day: "numeric", month: "short" })}, ${format(at, "UTC", { timeStyle: "short" })}`,
+  }
 }
 
 export { localWhen, remindersByDay, timeOf, weekDays, whenOf, type Day }

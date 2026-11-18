@@ -36,10 +36,22 @@ function localDateTime(instant: Date, timeZone: string) {
   }
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+// `count` calendar days from a local date, each with its weekday: "2026-11-18" gives Wed 2026-11-18, Thu 2026-11-19…
+// Whole days only, so it needs no timezone and no clock change can shift it.
+function daysFrom(today: string, count: number) {
+  const [year, month, day] = today.split("-").map(Number)
+  return Array.from({ length: count }, (_, i) => {
+    const date = new Date(Date.UTC(year, month - 1, day + i))
+    return { weekday: WEEKDAYS[date.getUTCDay()], date: date.toISOString().slice(0, 10) }
+  })
+}
+
 // From the start of local day `from` up to, not including, the start of the day after local day `to`.
 function localDays(from: string, to: string, timeZone: string) {
   const [year, month, day] = to.split("-").map(Number)
   return { start: instantAt(from, "00:00", timeZone), end: new Date(new TZDate(year, month - 1, day + 1, timeZone).getTime()) }
 }
 
-export { canonicalTimeZone, instantAt, localDateTime, localDays, weekRange }
+export { canonicalTimeZone, daysFrom, instantAt, localDateTime, localDays, weekRange }

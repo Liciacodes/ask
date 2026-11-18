@@ -36,6 +36,7 @@ A command bar assistant. Today: the command bar, reminders created from it and s
 - `npm run typecheck`: generate Next route types, then `tsc --noEmit`
 - `npm run db:migrate`: apply migrations to the real database (`DATABASE_URL`). `npm run db:migrate:test`: the same for the test database (`TEST_DATABASE_URL`)
 - `npm run test:api`: Vitest tests in `tests/`, calling the API route handlers against the test database. Run `npm run db:migrate:test` first whenever a migration is added. From Windows, run it in PowerShell: Git Bash hands Node a lowercase drive letter and Vitest then loads twice
+- `npm run test:live`: real Groq calls on the sentences in `tests/date-cases.ts` (`tests/live/`, at most 2 calls each). Only when the user says so; never in CI
 - `npm run test:e2e`: Playwright browser tests in `e2e/` (Chromium). Reuses a running dev server, or starts one. First time: `npx playwright install chromium`
 
 CI (`.github/workflows/ci.yml`) runs three jobs on every push: lint and typecheck; the API tests against a throwaway Postgres 18 container; and the browser tests against a production build.

@@ -1,12 +1,14 @@
 import { Chat } from "@ai-sdk/react"
 import { readUIMessageStream, simulateReadableStream } from "ai"
 import { MockLanguageModelV4 } from "ai/test"
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { POST } from "@/app/api/agent/route"
 import { agentStream, MAX_STEPS, type AgentMessage } from "@/lib/agent/agent"
 import { agentChat } from "@/lib/agent/client"
 import { db } from "@/lib/db"
+import { localDateTime } from "@/lib/time"
 import { currentUserId } from "@/lib/user"
+import { dateCases } from "../date-cases"
 import { nextYear, request, saveReminder, setUpTestDatabase } from "./helpers"
 
 // The route asks lib/agent/model for its model; here it gets the scripted one, so no test reaches Groq.
@@ -55,8 +57,8 @@ const toolParts = (message: AgentMessage) => message.parts.filter((part) => part
 const previews = (message: AgentMessage) => message.parts.filter((part) => part.type === "data-preview").map((part) => (part as { data: unknown }).data)
 
 // Runs one request to the agent and returns the assistant's message as the bar would hold it.
-async function run(model: MockLanguageModelV4, conversation: AgentMessage[]) {
-  const stream = agentStream({ model, messages: conversation, userId: await currentUserId(), timezone: LAGOS, now: new Date() })
+async function run(model: MockLanguageModelV4, conversation: AgentMessage[], { timezone = LAGOS, now = new Date() } = {}) {
+  const stream = agentStream({ model, messages: conversation, userId: await currentUserId(), timezone, now })
   const continuing = conversation.at(-1)?.role === "assistant" ? conversation.at(-1) : undefined
   let latest: AgentMessage | undefined
   for await (const message of readUIMessageStream<AgentMessage>({ stream, message: continuing })) latest = message
@@ -221,6 +223,63 @@ describe("changing", () => {
     expect(previews(reply)).toEqual([])
     expect(toolParts(reply)[0].approval?.reason).toContain(reason)
     expect((await db.reminder.findUniqueOrThrow({ where: { id: reminder.id } })).status).toBe(reminder.status)
+  })
+})
+
+describe("dates", () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const calendarIn = (model: MockLanguageModelV4) => {
+    const system = model.doStreamCalls[0].prompt.find((message) => message.role === "system")
+    return String(system?.content)
+      .split("\n")
+      .filter((line) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{4}-\d{2}-\d{2}/.test(line))
+  }
+
+  test("the model gets the next 14 days with their weekdays, from today, across the end of the month", async () => {
+    const model = fakeModel(says("OK."))
+
+    await run(model, [asking("Hi")], { now: new Date("2026-11-18T20:36:00+01:00") })
+
+    const calendar = calendarIn(model)
+    expect(calendar).toHaveLength(14)
+    expect(calendar.slice(0, 4)).toEqual(["Wed 2026-11-18 (today)", "Thu 2026-11-19 (tomorrow)", "Fri 2026-11-20", "Sat 2026-11-21"])
+    expect(calendar.at(-1)).toBe("Tue 2026-12-01")
+  })
+
+  test("today is the person's date, not the server's: just after midnight in Lagos it's already Thursday", async () => {
+    const model = fakeModel(says("OK."))
+
+    await run(model, [asking("Hi")], { now: new Date("2026-11-19T00:30:00+01:00") })
+
+    expect(calendarIn(model)[0]).toBe("Thu 2026-11-19 (today)")
+  })
+
+  test.each(dateCases)("for “$say”, the model is handed $weekday $expected.date instead of working it out", async (dateCase) => {
+    const model = fakeModel(says("OK."))
+
+    await run(model, [asking(dateCase.say)], { now: new Date(dateCase.now), timezone: dateCase.timezone })
+
+    expect(calendarIn(model)).toContain(`${dateCase.weekday} ${dateCase.expected.date}`)
+  })
+
+  test.each(dateCases)("the expected answer to “$say” previews and saves $expected.date at $expected.time", async (dateCase) => {
+    // The server checks the time is in the future, so the clock reads the moment the sentence was typed.
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date(dateCase.now))
+    const at = { now: new Date(dateCase.now), timezone: dateCase.timezone }
+    const question = asking(dateCase.say)
+    const model = fakeModel(callsTool("createReminder", { title: "Go for a run", ...dateCase.expected }), says("Saved."))
+
+    const proposed = await run(model, [question], at)
+    await run(model, [question, answer(proposed, true)], at)
+
+    expect(previews(proposed)).toEqual([{ action: "create", reminder: { title: "Go for a run", description: null, ...dateCase.expected } }])
+    const saved = await db.reminder.findFirstOrThrow()
+    expect(saved.dueAt.toISOString()).toBe(dateCase.savedAt)
+    expect(localDateTime(saved.dueAt, dateCase.timezone)).toEqual(dateCase.expected)
   })
 })
 

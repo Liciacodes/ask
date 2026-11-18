@@ -65,7 +65,10 @@ test("an action waits for your OK on a preview card, and nothing is sent until y
 
   const preview = card(page, "New reminder")
   await expect(preview).toContainText("Call mum")
-  await expect(preview).toContainText("Fri 20 Nov, 18:00")
+  await expect(preview).toContainText("Friday 20 Nov, 18:00")
+  // The day stands out, so a wrong one is noticed before saying yes.
+  await expect(preview.locator("[data-weekday]")).toHaveText("Friday")
+  await expect(preview.locator("[data-weekday]")).toHaveCSS("font-weight", "600")
   await expect(preview.getByRole("button", { name: "Save", exact: true })).toBeVisible()
   await expect(preview.getByRole("button", { name: "Don't save" })).toBeVisible()
   await expect(hints(page)).toHaveText(["↵save", "escdon't save"])
@@ -154,8 +157,10 @@ test("a change shows before and after, and approving moves the card to its new d
   await ask(page, "move the dentist to tomorrow")
 
   const preview = card(page, "Change reminder")
-  await expect(preview.locator("del")).toHaveText("was Wed 18 Nov, 09:00")
-  await expect(preview.locator("ins")).toHaveText("now Thu 19 Nov, 09:00")
+  await expect(preview.locator("del")).toHaveText("was Wednesday 18 Nov, 09:00")
+  await expect(preview.locator("ins")).toHaveText("now Thursday 19 Nov, 09:00")
+  await expect(preview.locator("ins [data-weekday]")).toHaveCSS("font-weight", "600")
+  await expect(preview.locator("del [data-weekday]")).toHaveCSS("font-weight", "400")
   await expect(hints(page)).toHaveText(["↵save changes", "esckeep as is"])
   await page.keyboard.press("Enter")
 

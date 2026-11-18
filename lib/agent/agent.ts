@@ -11,13 +11,14 @@ import {
 } from "ai"
 import { cancelReminderInput, changeReminderInput, createReminderInput, listRemindersInput, restoreReminderInput } from "@/lib/agent-actions"
 import { remindersDue } from "@/lib/reminder-store"
-import { localDateTime, localDays } from "@/lib/time"
+import { daysFrom, localDateTime, localDays } from "@/lib/time"
 import { planChange, planCreate, planStatus, type AgentContext, type Plan, type Preview } from "./plans"
 
 // The agent: a model with tools, through the AI SDK, with every action held for the person's OK.
 
 const MAX_STEPS = 6
 const LIST_LIMIT = 50
+const CALENDAR_DAYS = 14
 
 function instructions(now: Date, timezone: string) {
   const today = new Intl.DateTimeFormat("en-GB", {
@@ -29,10 +30,16 @@ function instructions(now: Date, timezone: string) {
     minute: "2-digit",
     timeZone: timezone,
   }).format(now)
-  const { date } = localDateTime(now, timezone)
+  // Models miscount weekdays ("Saturday" on a Wednesday came back as Friday), so they pick dates from a calendar instead.
+  const calendar = daysFrom(localDateTime(now, timezone).date, CALENDAR_DAYS).map(
+    ({ weekday, date }, i) => `${weekday} ${date}${i === 0 ? " (today)" : i === 1 ? " (tomorrow)" : ""}`
+  )
   return [
     "You are Ask, a reminders assistant inside a command bar.",
-    `It is now ${today} (${date}) in the person's timezone, ${timezone}. Every date and time is on that clock. In tool inputs, write dates as YYYY-MM-DD and times as 24-hour HH:MM. When you write to the person, say dates in words, like Friday 20 November at 18:00.`,
+    `It is now ${today} in the person's timezone, ${timezone}. Every date and time is on that clock.`,
+    `The next ${CALENDAR_DAYS} days are below. Take dates from this list rather than working them out.`,
+    ...calendar,
+    "In tool inputs, write dates as YYYY-MM-DD and times as 24-hour HH:MM. When you write to the person, say dates in words with the weekday, never as YYYY-MM-DD.",
     "To change, cancel or bring back a reminder, use its id from an earlier tool result in this conversation, or find it with listReminders. Never guess an id.",
     "To create, change, cancel or bring back a reminder, call its tool straight away: the bar shows the person a preview card and waits for their OK, so never ask them to confirm in your reply. Don't say it's done until the tool's result comes back.",
     "If an action is refused with a reason, explain it in a few words or ask what they want instead. If the person declines, don't propose it again unless they ask.",

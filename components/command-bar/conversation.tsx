@@ -3,7 +3,7 @@
 import { createStickToBottom, isComposing } from "@ui-sdk/core"
 import { Button } from "@ui-sdk/react/button"
 import { Input } from "@ui-sdk/react/input"
-import { useEffect, useId, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState, type ReactNode } from "react"
 import { localWhen } from "@/components/week/days"
 import type { Card, Preview } from "@/lib/agent/plans"
 import { AskIcon, CheckIcon } from "./icons"
@@ -35,8 +35,10 @@ function statusOf(part: ActionPart): CardStatus {
   }
 }
 
-function Change({ was, now, className }: { was: string; now: string; className: string }) {
-  if (was === now) return <p className={className}>{now}</p>
+type ChangeProps = { was: ReactNode; now: ReactNode; same: boolean; className: string }
+
+function Change({ was, now, same, className }: ChangeProps) {
+  if (same) return <p className={className}>{now}</p>
   return (
     <p className={className}>
       <del className="text-hint">
@@ -55,8 +57,21 @@ function Change({ was, now, className }: { was: string; now: string; className: 
 }
 
 const titleLine = "text-[15px] font-medium leading-snug wrap-break-word"
-const whenLine = "text-[13px] text-hint tabular-nums"
+const whenLine = "text-[14px] text-hint tabular-nums"
 const detailsLine = "mt-1 text-[13px] wrap-break-word whitespace-pre-wrap"
+
+// The weekday in bold ink, so a wrong day catches the eye before you approve. A day being replaced stays plain.
+function When({ card, plain = false }: { card: Card; plain?: boolean }) {
+  const { weekday, rest } = localWhen(card)
+  return (
+    <>
+      <span data-weekday="" className={plain ? undefined : "font-semibold text-ink"}>
+        {weekday}
+      </span>{" "}
+      {rest}
+    </>
+  )
+}
 
 function Details({ preview, marked }: { preview: Preview; marked: boolean }) {
   const title = (card: Card) => (marked ? <span className="-mx-1 box-decoration-clone rounded-[2px] px-1 highlighter">{card.title}</span> : card.title)
@@ -66,7 +81,9 @@ function Details({ preview, marked }: { preview: Preview; marked: boolean }) {
     return (
       <>
         <p className={titleLine}>{title(reminder)}</p>
-        <p className={whenLine}>{localWhen(reminder)}</p>
+        <p className={whenLine}>
+          <When card={reminder} />
+        </p>
         {reminder.description && <p className={detailsLine}>{reminder.description}</p>}
       </>
     )
@@ -75,10 +92,24 @@ function Details({ preview, marked }: { preview: Preview; marked: boolean }) {
   const { before, after } = preview
   return (
     <>
-      {before.title === after.title ? <p className={titleLine}>{title(after)}</p> : <Change was={before.title} now={after.title} className={titleLine} />}
-      <Change was={localWhen(before)} now={localWhen(after)} className={whenLine} />
+      {before.title === after.title ? (
+        <p className={titleLine}>{title(after)}</p>
+      ) : (
+        <Change was={before.title} now={after.title} same={false} className={titleLine} />
+      )}
+      <Change
+        was={<When card={before} plain />}
+        now={<When card={after} />}
+        same={before.date === after.date && before.time === after.time}
+        className={whenLine}
+      />
       {(before.description || after.description) && (
-        <Change was={before.description ?? "No details"} now={after.description ?? "No details"} className={detailsLine} />
+        <Change
+          was={before.description ?? "No details"}
+          now={after.description ?? "No details"}
+          same={before.description === after.description}
+          className={detailsLine}
+        />
       )}
     </>
   )
