@@ -148,6 +148,32 @@ function countedModel(model: Parameters<typeof wrapLanguageModel>[0]["model"]) {
 
 // Whether a reply stopped for lack of room: Groq turning calls away under its own rate limits (after the
 // SDK has already waited and retried), or the site's calls for today used up. Null for anything else.
+// When Groq's tokens for the minute are used up it says how long to wait, up to a minute, and the AI SDK would wait
+// that out twice over while the person stares at an empty reply. So the SDK doesn't retry (maxRetries: 0 in agent.ts)
+// and this waits once, only for a short wait. Anything longer ends the reply with the busy message straight away.
+const MAX_WAIT_MS = 5_000
+const UNSAID_WAIT_MS = 1_000
+
+function shortWaitFor(error: unknown) {
+  if (!APICallError.isInstance(error) || !error.isRetryable) return undefined
+  const headers = error.responseHeaders ?? {}
+  const ms = headers["retry-after-ms"] ? Number(headers["retry-after-ms"]) : headers["retry-after"] ? Number(headers["retry-after"]) * 1000 : UNSAID_WAIT_MS
+  return ms >= 0 && ms <= MAX_WAIT_MS ? ms : undefined
+}
+
+const waitsBriefly: LanguageModelMiddleware = {
+  wrapStream: async ({ doStream }) => {
+    try {
+      return await doStream()
+    } catch (error) {
+      const ms = shortWaitFor(error)
+      if (ms === undefined) throw error
+      await new Promise((resolve) => setTimeout(resolve, ms))
+      return doStream()
+    }
+  },
+}
+
 function noRoomIn(error: unknown) {
   const cause = RetryError.isInstance(error) ? error.lastError : error
   if (cause instanceof SiteUsedUp) return "siteUsedUp" as const
@@ -155,4 +181,4 @@ function noRoomIn(error: unknown) {
   return null
 }
 
-export { countedModel, dailyLimits, isNewQuestion, noRoomIn, takeQuestion, type StreamPart }
+export { countedModel, dailyLimits, isNewQuestion, MAX_WAIT_MS, noRoomIn, takeQuestion, waitsBriefly, type StreamPart }

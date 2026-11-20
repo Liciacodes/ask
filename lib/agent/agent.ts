@@ -12,7 +12,7 @@ import {
 import { cancelReminderInput, changeReminderInput, createReminderInput, listRemindersInput, restoreReminderInput } from "@/lib/agent-actions"
 import { remindersDue } from "@/lib/reminder-store"
 import { daysFrom, localDateTime, localDays } from "@/lib/time"
-import { noRoomIn } from "./limits"
+import { noRoomIn, waitsBriefly } from "./limits"
 import { planChange, planCreate, planStatus, type AgentContext, type Plan, type Preview } from "./plans"
 import { problems } from "./problems"
 import { weekdaysPutRight } from "./weekdays"
@@ -128,10 +128,10 @@ function agentStream({ model, messages, userId, timezone, now, onNoRoom }: Agent
   const said = messages.findLast((message) => message.role === "user")?.parts.flatMap((part) => (part.type === "text" ? [part.text] : []))
   const question = whichWeek(said?.join(" ") ?? "", now, timezone)
 
-  // Outermost first: the reply's weekdays are put right, and "next Friday" is asked about.
+  // Outermost first: the reply's weekdays are put right, "next Friday" is asked about, and Groq's waits stay short.
   const checked = wrapLanguageModel({
     model,
-    middleware: [weekdaysPutRight(localDateTime(now, timezone).date), ...(question ? [asksInstead(question)] : [])],
+    middleware: [weekdaysPutRight(localDateTime(now, timezone).date), ...(question ? [asksInstead(question)] : []), waitsBriefly],
   })
 
   // Running out of room says so. Unexpected failures, like the database going wrong, stay in the server log;
@@ -173,6 +173,8 @@ function agentStream({ model, messages, userId, timezone, now, onNoRoom }: Agent
 
       const result = streamText({
         model: checked,
+        // Groq's waits are handled by waitsBriefly, which keeps them short.
+        maxRetries: 0,
         instructions: instructions(now, timezone),
         // A reply stopped part way can leave a tool call with no result; the model never sees those.
         messages: await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true }),

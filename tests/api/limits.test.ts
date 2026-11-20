@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { POST } from "@/app/api/agent/route"
 import type { AgentMessage } from "@/lib/agent/agent"
 import { agentChat } from "@/lib/agent/client"
-import { dailyLimits } from "@/lib/agent/limits"
+import { dailyLimits, MAX_WAIT_MS } from "@/lib/agent/limits"
 import { problems } from "@/lib/agent/problems"
 import { db } from "@/lib/db"
 import { callsTool, fakeModel, says } from "./fake-model"
@@ -30,15 +30,25 @@ const failing = (error: Error) =>
       throw error
     },
   })
-const rateLimited = () =>
+// Groq says how many seconds to wait before trying again; zero keeps the one short wait instant here.
+const rateLimited = (retryAfter = "0") =>
   new APICallError({
     message: "Rate limit reached for model openai/gpt-oss-120b",
     url: "https://api.groq.com/openai/v1/chat/completions",
     requestBodyValues: {},
     statusCode: 429,
-    // Groq says when to try again; zero keeps the SDK's own retries instant here.
-    responseHeaders: { "retry-after": "0" },
+    responseHeaders: { "retry-after": retryAfter },
   })
+// A model Groq turns away once, then lets through.
+const turnedAwayOnce = (error: Error) => {
+  let calls = 0
+  return new MockLanguageModelV4({
+    doStream: async () => {
+      if (calls++ === 0) throw error
+      return says("OK.")
+    },
+  })
+}
 
 let model: MockLanguageModelV4
 const using = (next: MockLanguageModelV4) => {
@@ -216,15 +226,38 @@ describe("the site's calls to the model", () => {
 })
 
 describe("when Groq turns calls away", () => {
-  test("after the SDK's own retries, the reply says Ask is busy, and gives back the site's calls and the visitor's question", async () => {
+  test("a short wait is waited once; if Groq still says no, the reply shows the busy message, and gives back the site's calls and the visitor's question", async () => {
     using(failing(rateLimited()))
 
     const reply = await ask()
 
-    expect(reply).toMatchObject({ status: 200, stoppedWith: "Ask is busy right now. Try again in a minute." })
-    expect(model.doStreamCalls).toHaveLength(3)
+    expect(reply).toMatchObject({ status: 200, stoppedWith: problems.busy })
+    expect(model.doStreamCalls).toHaveLength(2)
     expect(await usage("site")).toMatchObject({ modelCalls: 0 })
     expect(await usage(TEST_VISITOR)).toMatchObject({ questions: 0 })
+  })
+
+  test(`Groq asking for a minute's wait shows the busy message at once: nobody waits more than ${MAX_WAIT_MS / 1000}s on Groq`, async () => {
+    using(failing(rateLimited("59")))
+    const asked = performance.now()
+
+    const reply = await ask()
+
+    expect(performance.now() - asked).toBeLessThan(MAX_WAIT_MS)
+    expect(reply.stoppedWith).toBe(problems.busy)
+    expect(model.doStreamCalls).toHaveLength(1)
+    expect(await usage(TEST_VISITOR)).toMatchObject({ questions: 0 })
+  })
+
+  test("after one short wait, a call Groq lets through answers as usual, and only that call counts", async () => {
+    using(turnedAwayOnce(rateLimited("0.05")))
+
+    const reply = await ask()
+
+    expect(reply).toMatchObject({ status: 200, stoppedWith: undefined })
+    expect(model.doStreamCalls).toHaveLength(2)
+    expect(await usage("site")).toMatchObject({ modelCalls: 1 })
+    expect(await usage(TEST_VISITOR)).toMatchObject({ questions: 1 })
   })
 
   test("the bar shows the busy reply, and the next question goes through", async () => {
