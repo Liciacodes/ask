@@ -1,7 +1,7 @@
 import { Chat } from "@ai-sdk/react"
 import { readUIMessageStream } from "ai"
 import { MockLanguageModelV4 } from "ai/test"
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { POST } from "@/app/api/agent/route"
 import { agentStream, MAX_STEPS, type AgentMessage } from "@/lib/agent/agent"
 import { agentChat } from "@/lib/agent/client"
@@ -335,6 +335,68 @@ describe("the test sentences", () => {
     if (tries) expect(reply.parts).toContainEqual({ type: "data-refused", id: `call-${tries.tool}`, data: { reason: tries.reason } })
     expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: expected.says })
     expect(await db.reminder.findMany()).toEqual(before)
+  })
+})
+
+describe("“next” with a weekday", () => {
+  // Wednesday 18 November in Lagos, so next Friday could be the 20th or the 27th.
+  const at = { now: new Date("2026-11-18T10:20:00+01:00"), timezone: LAGOS }
+  const whichFriday = "Do you mean Friday 20 November or Friday 27 November?"
+  const dentistOn = (date: string) => callsTool("createReminder", { title: "Dentist", date, time: "09:00" })
+  const asked: AgentMessage = { id: "asked", role: "assistant", parts: [{ type: "text", text: whichFriday }] }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(at.now)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  test("a card the model guesses for “next Friday” becomes the question, with nothing to approve", async () => {
+    const model = fakeModel(dentistOn("2026-11-20"))
+
+    const reply = await run(model, [asking("dentist next Friday at 9am")], at)
+
+    expect(previews(reply)).toEqual([])
+    expect(toolParts(reply)).toEqual([])
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: whichFriday })
+    expect(model.doStreamCalls).toHaveLength(1)
+    expect(await db.reminder.count()).toBe(0)
+  })
+
+  test("the answer that names the date gets its card", async () => {
+    const model = fakeModel(dentistOn("2026-11-27"))
+
+    const reply = await run(model, [asking("dentist next Friday at 9am"), asked, asking("the 27th")], at)
+
+    expect(previews(reply)).toEqual([{ action: "create", reminder: { title: "Dentist", description: null, date: "2026-11-27", time: "09:00" } }])
+  })
+
+  test("a date in the same words settles it", async () => {
+    const reply = await run(fakeModel(dentistOn("2026-11-27")), [asking("dentist next Friday the 27th at 9am")], at)
+
+    expect(previews(reply)).toHaveLength(1)
+  })
+
+  test("looking is never held up: the list runs, and the model's words go through as they were", async () => {
+    const model = fakeModel(callsTool("listReminders", { from: "2026-11-20", to: "2026-11-27" }), says("Nothing on either Friday."))
+
+    const reply = await run(model, [asking("what's on next Friday?")], at)
+
+    expect(toolParts(reply).map((part) => part.state)).toEqual(["output-available"])
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: "Nothing on either Friday." })
+  })
+
+  test("cancelling is asked about too, and the reminder stays", async () => {
+    const dentist = await saveReminder({ title: "Dentist", dueAt: new Date("2026-11-20T08:00:00Z") })
+    const model = fakeModel(callsTool("cancelReminder", { id: dentist.id }))
+
+    const reply = await run(model, [asking("cancel the dentist next Friday")], at)
+
+    expect(previews(reply)).toEqual([])
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: whichFriday })
+    expect((await db.reminder.findUniqueOrThrow({ where: { id: dentist.id } })).status).toBe("pending")
   })
 })
 

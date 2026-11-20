@@ -155,4 +155,4 @@ function noRoomIn(error: unknown) {
   return null
 }
 
-export { countedModel, dailyLimits, isNewQuestion, noRoomIn, takeQuestion }
+export { countedModel, dailyLimits, isNewQuestion, noRoomIn, takeQuestion, type StreamPart }
