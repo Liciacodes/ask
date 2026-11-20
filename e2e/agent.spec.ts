@@ -309,3 +309,12 @@ test("closing the bar forgets the conversation", async ({ page }) => {
   await expect(conversation(page).getByText("You have the dentist at 09:00.")).toHaveCount(0)
   expect(requests[1].messages.map(textOf)).toEqual(["hello"])
 })
+
+test("a test that forgets to fake /api/agent never reaches a server", async ({ page }) => {
+  await goHome(page)
+
+  // A body the route turns away before any model call, so even a broken block couldn't reach Groq.
+  const sent = await page.evaluate(() => fetch("/api/agent", { method: "POST", body: "{}" }).then(() => "reached a server", () => "blocked"))
+
+  expect(sent).toBe("blocked")
+})

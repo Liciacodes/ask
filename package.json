@@ -9,7 +9,7 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test:api": "node scripts/with-test-db.mjs vitest run",
-    "test:live": "node scripts/with-test-db.mjs vitest run --config vitest.live.config.mts",
+    "test:live": "node scripts/with-test-db.mjs --real-groq vitest run --config vitest.live.config.mts",
     "test:e2e": "playwright test",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",

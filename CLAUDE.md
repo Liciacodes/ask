@@ -13,7 +13,12 @@ A command bar assistant. Today: the command bar, reminders created from it and s
 - **Every visitor's reminders are their own.** There are no accounts yet: `proxy.ts` gives each visitor a random id in an httpOnly cookie (on `/api/*` only, so the page stays static), and every route starts with `visitorFrom(request)` from `lib/visitor.ts`, refusing with `noVisitor()` when it's missing. Every query filters by that id. A new route that reads or changes reminders must do the same. API tests act as `TEST_VISITOR` (`tests/api/helpers.ts`).
 - **The agent never acts without an OK.** Every tool that changes something has an approval in `toolApproval` (`lib/agent/agent.ts`), and only read-only tools skip it. There is no permanent delete for the agent; cancel can be undone.
 - **Every model call counts against a daily limit.** The agent route wraps the model in `countedModel` (`lib/agent/limits.ts`), which takes one of the site's calls for the day before each call to Groq. A new question first takes one of the visitor's questions (`takeQuestion`); answering a preview card isn't a new question. The limits are `ASK_VISITOR_QUESTIONS_PER_DAY` and `ASK_SITE_GROQ_CALLS_PER_DAY` (10 and 60 when empty), counted per UTC day in `daily_usage`. Anything new that calls a model must go through `countedModel`. What the bar says when a reply stops for lack of room is in `lib/agent/problems.ts`, shared by the server and the bar.
-- **Real model calls only when the user says so.** Tests use a fake model (`MockLanguageModelV4` from `ai/test`) and never reach Groq.
+- **Real model calls only when the user says so.** Tests use a fake model (`MockLanguageModelV4` from `ai/test`) and never reach Groq, and code enforces it:
+  - Every test run except `npm run test:live` gets an empty `GROQ_API_KEY`. `scripts/with-test-db.mjs` does it for Vitest, `playwright.config.ts` for the server Playwright starts.
+  - `agentModel()` refuses an empty key. Inside Vitest it also refuses unless `ALLOW_REAL_GROQ=1`.
+  - The browser tests block any `/api/agent` call they don't fake, even on a reused dev server.
+  - `npm run test:live` refuses unless `ALLOW_REAL_GROQ=1` is set in the shell for that one command. The setting in `.env.local` is ignored.
+  - `tests/no-real-groq.test.ts` tries these for real. Don't weaken any of them.
 - **`lib/agent-actions.ts` (the tools' zod schemas) is the user's.** Review it and point out problems; don't edit it.
 - **Commit messages describe the change.** Never "Day N" or other progress counters.
 
@@ -38,7 +43,7 @@ A command bar assistant. Today: the command bar, reminders created from it and s
 - `npm run typecheck`: generate Next route types, then `tsc --noEmit`
 - `npm run db:migrate`: apply migrations to the real database (`DATABASE_URL`). `npm run db:migrate:test`: the same for the test database (`TEST_DATABASE_URL`)
 - `npm run test:api`: Vitest tests in `tests/`, calling the API route handlers against the test database. Run `npm run db:migrate:test` first whenever a migration is added. From Windows, run it in PowerShell: Git Bash hands Node a lowercase drive letter and Vitest then loads twice
-- `npm run test:live`: real Groq calls on the sentences in `tests/date-cases.ts` (`tests/live/`, at most 2 calls each). Only when the user says so; never in CI
+- `npm run test:live`: real Groq calls on the sentences in `tests/date-cases.ts` (`tests/live/`, at most 2 calls each). Only when the user says so; never in CI. It needs `ALLOW_REAL_GROQ=1` for that one command. In PowerShell: `try { $env:ALLOW_REAL_GROQ = "1"; npm run test:live } finally { Remove-Item Env:ALLOW_REAL_GROQ }`
 - `npm run test:e2e`: Playwright browser tests in `e2e/` (Chromium). Reuses a running dev server, or starts one. First time: `npx playwright install chromium`
 
 CI (`.github/workflows/ci.yml`) runs three jobs on every push: lint and typecheck; the API tests against a throwaway Postgres 18 container; and the browser tests against a production build.

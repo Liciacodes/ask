@@ -37,6 +37,9 @@ const saved = (route: Route, sent: Sent) =>
   route.fulfill({ status: 201, json: reminder(sent.title, sent.due_at, { timezone: sent.timezone, created_at: "2026-11-18T09:20:00.000Z" }) })
 
 async function goHome(page: Page, week: ReminderJson[] | "already faked" = []) {
+  // No browser test reaches the real /api/agent. A test's own fake (e2e/fake-agent.ts) is a page route, and page
+  // routes always win over this context route.
+  await page.context().route("**/api/agent", (route) => route.abort("blockedbyclient"))
   if (week !== "already faked") await fakeWeek(page, week)
   await page.goto("/")
   // Ctrl+K does nothing until React has hydrated, which is also when the shortcut label gets its text.
