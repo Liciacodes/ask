@@ -20,7 +20,14 @@ if (DATABASE_URL && database(DATABASE_URL) === database(TEST_DATABASE_URL)) {
   process.exit(1)
 }
 
-const result = spawnSync(process.argv.slice(2).join(" "), {
+// The command runs through a shell (Windows needs one for npm's .cmd files), which splits on spaces, so each
+// argument is quoted for it: `-t "next Friday"` must reach Vitest as one argument.
+const quoted = (arg) => {
+  if (/^[\w@+=:,./-]+$/.test(arg)) return arg
+  return process.platform === "win32" ? `"${arg.replace(/"/g, '""')}"` : `'${arg.replace(/'/g, "'\\''")}'`
+}
+
+const result = spawnSync(process.argv.slice(2).map(quoted).join(" "), {
   stdio: "inherit",
   shell: true,
   env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },
