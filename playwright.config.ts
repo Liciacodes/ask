@@ -1,7 +1,11 @@
 import { defineConfig, devices } from "@playwright/test"
 
 const ci = Boolean(process.env.CI)
-const url = `http://localhost:${process.env.PORT ?? 3000}`
+// The browser tests always get a server of their own, on a port of their own: never your dev server, which has
+// your Groq key and your database. A second `next dev` can't run beside yours (Next locks .next/dev), but a production
+// build can, so locally and in CI alike they build, then start it here. If the port is taken, the run stops.
+const PORT = 3100
+const url = `http://localhost:${PORT}`
 
 export default defineConfig({
   testDir: "./e2e",
@@ -14,12 +18,12 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: ci ? "npm run build && npm run start" : "npm run dev",
+    command: `npm run build && npm run start -- --port ${PORT}`,
     url,
-    reuseExistingServer: !ci,
-    timeout: 180_000,
-    // The server Playwright starts gets no Groq key: empty, so Next can't fill it in from .env.local. A dev server
-    // it reuses has yours, which is why every page also blocks /api/agent unless the test fakes it (e2e/helpers.ts).
+    reuseExistingServer: false,
+    timeout: 240_000,
+    // No Groq key: empty, so Next can't fill it in from .env.local. Every page also blocks /api/agent unless the test
+    // fakes it (e2e/helpers.ts), so no browser test reaches the agent route at all.
     env: { GROQ_API_KEY: "" },
   },
 })
