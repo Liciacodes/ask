@@ -37,10 +37,10 @@ const EVENING = "2026-11-18T20:36:00+01:00"
 const agentCases: AgentCase[] = [
   // New reminders, with the date and time worked out from words.
   {
-    say: "Remind me to call mum tomorrow at 6pm",
+    say: "Remind me to call Tobi tomorrow at 6pm",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Call mum", date: "2026-11-19", time: "18:00" }, savedAt: "2026-11-19T17:00:00.000Z", has: { title: "mum" } },
+    expect: { does: "create", reminder: { title: "Call Tobi", date: "2026-11-19", time: "18:00" }, savedAt: "2026-11-19T17:00:00.000Z", has: { title: "tobi" } },
   },
   {
     // This came back as Friday 20 November before the model was given a calendar.
@@ -130,7 +130,7 @@ const agentCases: AgentCase[] = [
     expect: { does: "ask", says: "Do you mean Friday 20 November or Friday 27 November?" },
   },
   {
-    say: "remind me to call mum",
+    say: "remind me to call Dad",
     now: MORNING,
     timezone: LAGOS,
     expect: { does: "ask", says: "When should I remind you?" },
@@ -169,16 +169,16 @@ const agentCases: AgentCase[] = [
     expect: { does: "change", reminder: "Gym", input: { date: "2026-11-21" }, after: { title: "Gym", date: "2026-11-21", time: "18:00" } },
   },
   {
-    say: "rename call mum to call mum and dad",
+    say: "rename call grandma to visit grandma",
     now: MORNING,
     timezone: LAGOS,
-    saved: [{ title: "Call mum", date: "2026-11-19", time: "18:00" }],
+    saved: [{ title: "Call Grandma", date: "2026-11-19", time: "18:00" }],
     expect: {
       does: "change",
-      reminder: "Call mum",
-      input: { title: "Call mum and dad" },
-      after: { title: "Call mum and dad", date: "2026-11-19", time: "18:00" },
-      has: { title: "dad" },
+      reminder: "Call Grandma",
+      input: { title: "Visit Grandma" },
+      after: { title: "Visit Grandma", date: "2026-11-19", time: "18:00" },
+      has: { title: "visit" },
     },
   },
   {
@@ -263,13 +263,13 @@ const agentCases: AgentCase[] = [
 
   // Things Ask can't or won't do.
   {
-    say: "remind me yesterday at 5pm to call mum",
+    say: "remind me yesterday at 5pm to text Ada",
     now: MORNING,
     timezone: LAGOS,
     expect: {
       does: "refuse",
       says: "That time has passed. When should I remind you?",
-      tries: { tool: "createReminder", input: { title: "Call mum", date: "2026-11-17", time: "17:00" }, reason: "Pick a time in the future" },
+      tries: { tool: "createReminder", input: { title: "Text Ada", date: "2026-11-17", time: "17:00" }, reason: "Pick a time in the future" },
     },
   },
   {
