@@ -200,12 +200,12 @@ describe("changing", () => {
   })
 })
 
-const calendarIn = (model: MockLanguageModelV4) => {
-  const system = model.doStreamCalls[0].prompt.find((message) => message.role === "system")
-  return String(system?.content)
+// What the model is told: its instructions, and the calendar in them.
+const toldIn = (model: MockLanguageModelV4) => String(model.doStreamCalls[0].prompt.find((message) => message.role === "system")?.content)
+const calendarIn = (model: MockLanguageModelV4) =>
+  toldIn(model)
     .split("\n")
     .filter((line) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{4}-\d{2}-\d{2}/.test(line))
-}
 
 describe("dates", () => {
   afterEach(() => {
@@ -231,6 +231,63 @@ describe("dates", () => {
     expect(calendarIn(model)[0]).toBe("Thu 2026-11-19 (today)")
   })
 
+  test("the calendar is a lookup, not a limit: a date months past it gets its card", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-18T10:20:00+01:00"))
+    const flights = { title: "Book flights", date: "2027-03-03", time: "10:00" }
+    const model = fakeModel(callsTool("createReminder", flights))
+
+    const reply = await run(model, [asking("book flights on 3 March at 10am")], { now: new Date() })
+
+    expect(toldIn(model)).toContain("It's a lookup, not a limit: any future date is fine, however far ahead.")
+    expect(previews(reply)).toEqual([{ action: "create", reminder: { description: null, ...flights } }])
+  })
+})
+
+describe("asking only when it must", () => {
+  const instructions = async () => {
+    const model = fakeModel(says("OK."))
+    await run(model, [asking("Hi")])
+    return toldIn(model)
+  }
+
+  test("the card is the question: knowing what and when, the model is told to call the tool, never to ask in words", async () => {
+    const told = await instructions()
+
+    expect(told).toContain("The preview card is your question. When you know what to do and when, call the tool straight away")
+    expect(told).toContain('Never ask "Do you want…?" or "Shall I…?" in words.')
+  })
+
+  test("a time, a weekday or “the 1st” on its own is read without asking", async () => {
+    const told = await instructions()
+
+    expect(told).toContain("a time with no day is the next time it comes round (today if it's still ahead, otherwise tomorrow)")
+    expect(told).toContain('a weekday on its own or with "this" is the nearest one that hasn\'t passed')
+    expect(told).toContain('a day of the month on its own, like "the 1st", is the next one that hasn\'t passed')
+  })
+
+  test("only “next” with a weekday is unclear, and looking never asks", async () => {
+    const told = await instructions()
+
+    expect(told).toContain('Only "next" with a weekday, as in next Friday, is unclear')
+    expect(told).toContain("looking never needs a question")
+    // "Which Friday" as the example of something unclear made the model ask about every Friday.
+    expect(told).not.toMatch(/which Friday/i)
+  })
+
+  test.each(["call dad on Friday at 6pm", "call dad this Friday at 6pm"])("“%s” gets its card: the server only asks about “next”", async (said) => {
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2026-11-18T10:20:00+01:00"))
+    const model = fakeModel(callsTool("createReminder", { title: "Call dad", date: "2026-11-20", time: "18:00" }))
+
+    const reply = await run(model, [asking(said)], { now: new Date() })
+
+    expect(previews(reply)).toHaveLength(1)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 })
 
 // Each expected answer in tests/agent-cases.ts, sent through the server with a scripted model: the card the person

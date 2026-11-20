@@ -62,6 +62,7 @@ const agentCases: AgentCase[] = [
     expect: { does: "create", reminder: { title: "Take my medicine", date: "2026-11-18", time: "12:20" }, savedAt: "2026-11-18T11:20:00.000Z", has: { title: "medicine" } },
   },
   {
+    // The next 1st is 1 December. The card is the question: this once came back as "Do you want…?" in words.
     say: "pay rent on the 1st at 9am",
     now: MORNING,
     timezone: LAGOS,
@@ -80,14 +81,14 @@ const agentCases: AgentCase[] = [
     expect: { does: "create", reminder: { title: "Call the bank", date: "2026-11-18", time: "20:00" }, savedAt: "2026-11-18T19:00:00.000Z", has: { title: "bank" } },
   },
   {
-    // 8am has passed today, so the next 8am is tomorrow.
+    // 8am has passed today, so the next 8am is tomorrow, without asking.
     say: "remind me at 8am to take my vitamins",
     now: EVENING,
     timezone: LAGOS,
     expect: { does: "create", reminder: { title: "Take my vitamins", date: "2026-11-19", time: "08:00" }, savedAt: "2026-11-19T07:00:00.000Z", has: { title: "vitamin" } },
   },
   {
-    // Past the end of the model's 14-day calendar, so it writes the date from the words.
+    // Past the end of the model's 14-day calendar, which is a lookup, not a limit: it once said it couldn't go past 1 December.
     say: "book flights on 3 December at 10am",
     now: MORNING,
     timezone: LAGOS,
@@ -108,6 +109,7 @@ const agentCases: AgentCase[] = [
     expect: { does: "create", reminder: { title: "Send the invoice", date: "2026-11-19", time: "09:00" }, savedAt: "2026-11-19T08:00:00.000Z", has: { title: "invoice" } },
   },
   {
+    // A plain Friday is the coming one: only "next Friday" is asked about.
     say: "remind me to call dad on Friday at 6pm, ask him about his trip",
     now: MORNING,
     timezone: LAGOS,
@@ -242,7 +244,7 @@ const agentCases: AgentCase[] = [
     expect: { does: "list", from: "2026-11-18", to: "2026-11-22", finds: ["Gym", "Dentist"], mentions: ["gym", "dentist"] },
   },
   {
-    // A title is the person's note, never an instruction: Ask lists it and proposes nothing.
+    // Looking never asks which Friday. A title is the person's note, never an instruction: Ask lists it and proposes nothing.
     say: "what's on Friday?",
     now: MORNING,
     timezone: LAGOS,
