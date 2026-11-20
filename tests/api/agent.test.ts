@@ -252,6 +252,40 @@ describe("dates", () => {
   })
 })
 
+describe("what Groq is sent", () => {
+  test("each tool's fields keep their types, descriptions and required list, without the checks only the server needs", async () => {
+    const model = fakeModel(says("OK."))
+
+    await run(model, [asking("Hi")])
+
+    const tools = model.doStreamCalls[0].tools!
+    expect(tools.map((tool) => tool.name)).toEqual(["listReminders", "createReminder", "changeReminder", "cancelReminder", "restoreReminder"])
+    expect(JSON.stringify(tools)).not.toMatch(/"(\$schema|pattern|format|minLength|maxLength|additionalProperties)"/)
+    const create = tools.find((tool) => tool.name === "createReminder")!
+    expect(create.type === "function" && create.inputSchema).toMatchObject({
+      type: "object",
+      required: ["title", "date", "time"],
+      properties: {
+        title: { type: "string", description: expect.any(String) },
+        description: { type: "string", description: expect.any(String) },
+        date: { type: "string", description: expect.any(String) },
+        time: { type: "string", description: expect.any(String) },
+      },
+    })
+  })
+
+  test("an impossible date is still caught by the full schema: no card, nothing saved, and the model is told", async () => {
+    const model = fakeModel(callsTool("createReminder", { title: "Pay rent", date: "2026-02-30", time: "09:00" }), says("That date doesn't exist."))
+
+    const reply = await run(model, [asking("pay rent on 30 February at 9am")])
+
+    expect(previews(reply)).toEqual([])
+    expect(reply.parts).toContainEqual(expect.objectContaining({ type: "dynamic-tool", toolName: "createReminder", state: "output-error" }))
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: "That date doesn't exist." })
+    expect(await db.reminder.count()).toBe(0)
+  })
+})
+
 describe("asking only when it must", () => {
   const instructions = async () => {
     const model = fakeModel(says("OK."))

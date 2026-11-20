@@ -7,6 +7,8 @@ import {
   toUIMessageStream,
   wrapLanguageModel,
   type InferUITools,
+  type JSONSchema7,
+  type LanguageModelMiddleware,
   type UIMessage,
 } from "ai"
 import { cancelReminderInput, changeReminderInput, createReminderInput, listRemindersInput, restoreReminderInput } from "@/lib/agent-actions"
@@ -106,6 +108,26 @@ function agentTools(context: AgentContext) {
   }
 }
 
+// The model reads each field's type and description. The patterns, formats and lengths in the schemas are for
+// checking its answer, which the AI SDK does with the full schemas from lib/agent-actions.ts, so they're left out of
+// what Groq is sent: over 1,100 tokens a call, mostly the long regular expressions behind each date and id.
+const CHECKS_ONLY = new Set(["$schema", "pattern", "format", "minLength", "maxLength", "additionalProperties"])
+const lean = (schema: JSONSchema7 | boolean): JSONSchema7 | boolean => (typeof schema === "boolean" ? schema : withoutChecks(schema))
+
+function withoutChecks(schema: JSONSchema7): JSONSchema7 {
+  const kept: JSONSchema7 = Object.fromEntries(Object.entries(schema).filter(([key]) => !CHECKS_ONLY.has(key)))
+  if (schema.properties) kept.properties = Object.fromEntries(Object.entries(schema.properties).map(([name, field]) => [name, lean(field)]))
+  if (schema.anyOf) kept.anyOf = schema.anyOf.map(lean)
+  return kept
+}
+
+const sendsLeanTools: LanguageModelMiddleware = {
+  transformParams: async ({ params }) => ({
+    ...params,
+    tools: params.tools?.map((tool) => (tool.type === "function" ? { ...tool, inputSchema: withoutChecks(tool.inputSchema) } : tool)),
+  }),
+}
+
 // The messages as the bar holds them: typed tool parts, the preview card for each action that waits,
 // and the reason the server turned an action down.
 type AgentMessage = UIMessage<never, { preview: Preview; refused: { reason: string } }, InferUITools<ReturnType<typeof agentTools>>>
@@ -128,10 +150,11 @@ function agentStream({ model, messages, userId, timezone, now, onNoRoom }: Agent
   const said = messages.findLast((message) => message.role === "user")?.parts.flatMap((part) => (part.type === "text" ? [part.text] : []))
   const question = whichWeek(said?.join(" ") ?? "", now, timezone)
 
-  // Outermost first: the reply's weekdays are put right, "next Friday" is asked about, and Groq's waits stay short.
+  // Outermost first: Groq is sent lean tool schemas, the reply's weekdays are put right, "next Friday" is asked
+  // about, and Groq's waits stay short.
   const checked = wrapLanguageModel({
     model,
-    middleware: [weekdaysPutRight(localDateTime(now, timezone).date), ...(question ? [asksInstead(question)] : []), waitsBriefly],
+    middleware: [sendsLeanTools, weekdaysPutRight(localDateTime(now, timezone).date), ...(question ? [asksInstead(question)] : []), waitsBriefly],
   })
 
   // Running out of room says so. Unexpected failures, like the database going wrong, stay in the server log;
