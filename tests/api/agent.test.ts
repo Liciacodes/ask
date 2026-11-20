@@ -242,6 +242,14 @@ describe("dates", () => {
     expect(toldIn(model)).toContain("It's a lookup, not a limit: any future date is fine, however far ahead.")
     expect(previews(reply)).toEqual([{ action: "create", reminder: { description: null, ...flights } }])
   })
+
+  test("a wrong weekday in the model's words is put right before you see it, even when it arrives in pieces", async () => {
+    const model = fakeModel(says("Your rent is due Fri", "day December 1", "st at 09:00, and the report Thursday 23 November."))
+
+    const reply = await run(model, [asking("when are rent and the report due?")], { now: new Date("2026-11-18T10:20:00+01:00") })
+
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: "Your rent is due Tuesday December 1st at 09:00, and the report Monday 23 November." })
+  })
 })
 
 describe("asking only when it must", () => {

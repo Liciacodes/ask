@@ -15,6 +15,7 @@ import { daysFrom, localDateTime, localDays } from "@/lib/time"
 import { noRoomIn } from "./limits"
 import { planChange, planCreate, planStatus, type AgentContext, type Plan, type Preview } from "./plans"
 import { problems } from "./problems"
+import { weekdaysPutRight } from "./weekdays"
 import { asksInstead, whichWeek } from "./which-week"
 
 // The agent: a model with tools, through the AI SDK, with every action held for the person's OK.
@@ -127,6 +128,12 @@ function agentStream({ model, messages, userId, timezone, now, onNoRoom }: Agent
   const said = messages.findLast((message) => message.role === "user")?.parts.flatMap((part) => (part.type === "text" ? [part.text] : []))
   const question = whichWeek(said?.join(" ") ?? "", now, timezone)
 
+  // Outermost first: the reply's weekdays are put right, and "next Friday" is asked about.
+  const checked = wrapLanguageModel({
+    model,
+    middleware: [weekdaysPutRight(localDateTime(now, timezone).date), ...(question ? [asksInstead(question)] : [])],
+  })
+
   // Running out of room says so. Unexpected failures, like the database going wrong, stay in the server log;
   // the bar, and the model on later turns, get a plain sentence.
   const failed = (error: unknown) => {
@@ -165,7 +172,7 @@ function agentStream({ model, messages, userId, timezone, now, onNoRoom }: Agent
       }
 
       const result = streamText({
-        model: question ? wrapLanguageModel({ model, middleware: asksInstead(question) }) : model,
+        model: checked,
         instructions: instructions(now, timezone),
         // A reply stopped part way can leave a tool call with no result; the model never sees those.
         messages: await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true }),

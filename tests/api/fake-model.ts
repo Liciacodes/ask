@@ -19,11 +19,12 @@ const callsTool = (toolName: string, input: object): Step => ({
   }),
 })
 
-const says = (text: string): Step => ({
+// Several pieces arrive one after another, as a real model's words stream in.
+const says = (...pieces: string[]): Step => ({
   stream: simulateReadableStream({
     chunks: [
       { type: "text-start" as const, id: "text-1" },
-      { type: "text-delta" as const, id: "text-1", delta: text },
+      ...pieces.map((delta) => ({ type: "text-delta" as const, id: "text-1", delta })),
       { type: "text-end" as const, id: "text-1" },
       { type: "finish" as const, finishReason: { unified: "stop" as const, raw: undefined }, usage },
     ],
