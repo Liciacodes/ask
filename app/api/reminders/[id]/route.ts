@@ -1,13 +1,16 @@
 import { checkBody, conflict, notFound } from "@/lib/api"
 import { deleteReminder, findReminder, updateReminder } from "@/lib/reminder-store"
 import { reminderChanges, toJson } from "@/lib/reminders"
-import { currentUserId } from "@/lib/user"
+import { noVisitor, visitorFrom } from "@/lib/visitor"
 
 type Context = RouteContext<"/api/reminders/[id]">
 
 export async function PATCH(request: Request, ctx: Context) {
+  const visitor = visitorFrom(request)
+  if (!visitor) return noVisitor()
+
   const { id } = await ctx.params
-  const reminder = await findReminder(await currentUserId(), id)
+  const reminder = await findReminder(visitor, id)
   if (!reminder) return notFound()
 
   const body = await checkBody(request, reminderChanges)
@@ -18,8 +21,11 @@ export async function PATCH(request: Request, ctx: Context) {
   return Response.json(toJson(result.reminder))
 }
 
-export async function DELETE(_request: Request, ctx: Context) {
+export async function DELETE(request: Request, ctx: Context) {
+  const visitor = visitorFrom(request)
+  if (!visitor) return noVisitor()
+
   const { id } = await ctx.params
-  if (!(await deleteReminder(await currentUserId(), id))) return notFound()
+  if (!(await deleteReminder(visitor, id))) return notFound()
   return new Response(null, { status: 204 })
 }

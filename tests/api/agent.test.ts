@@ -7,9 +7,8 @@ import { agentStream, MAX_STEPS, type AgentMessage } from "@/lib/agent/agent"
 import { agentChat } from "@/lib/agent/client"
 import { db } from "@/lib/db"
 import { localDateTime } from "@/lib/time"
-import { currentUserId } from "@/lib/user"
 import { dateCases } from "../date-cases"
-import { nextYear, request, saveReminder, setUpTestDatabase } from "./helpers"
+import { nextYear, OTHER_VISITOR, request, saveReminder, setUpTestDatabase, TEST_VISITOR, visitorCookie } from "./helpers"
 
 // The route asks lib/agent/model for its model; here it gets the scripted one, so no test reaches Groq.
 const routeModel = vi.hoisted(() => ({ current: undefined as unknown }))
@@ -58,7 +57,7 @@ const previews = (message: AgentMessage) => message.parts.filter((part) => part.
 
 // Runs one request to the agent and returns the assistant's message as the bar would hold it.
 async function run(model: MockLanguageModelV4, conversation: AgentMessage[], { timezone = LAGOS, now = new Date() } = {}) {
-  const stream = agentStream({ model, messages: conversation, userId: await currentUserId(), timezone, now })
+  const stream = agentStream({ model, messages: conversation, userId: TEST_VISITOR, timezone, now })
   const continuing = conversation.at(-1)?.role === "assistant" ? conversation.at(-1) : undefined
   let latest: AgentMessage | undefined
   for await (const message of readUIMessageStream<AgentMessage>({ stream, message: continuing })) latest = message
@@ -125,7 +124,7 @@ describe("creating", () => {
     const { finished } = await approveThenRun(model, question)
 
     const saved = await db.reminder.findFirstOrThrow()
-    expect(saved).toMatchObject({ title: "Call mum", timezone: LAGOS, status: "pending", userId: await currentUserId() })
+    expect(saved).toMatchObject({ title: "Call mum", timezone: LAGOS, status: "pending", userId: TEST_VISITOR })
     expect(saved.dueAt.toISOString()).toBe(`${nextYear}-03-13T17:00:00.000Z`)
     expect(toolParts(finished)[0]).toMatchObject({ state: "output-available", output: { done: "create" } })
   })
@@ -319,6 +318,36 @@ describe("the agent route", () => {
     expect((await post(body)).status).toBe(400)
   })
 
+  test("the agent only ever sees and changes the asking visitor's reminders", async () => {
+    const mine = await saveReminder({ title: "Mine", dueAt: new Date(`${nextYear}-03-10T08:00:00Z`) })
+    await saveReminder({ title: "Theirs", dueAt: new Date(`${nextYear}-03-10T09:00:00Z`), userId: OTHER_VISITOR })
+    routeModel.current = fakeModel(
+      callsTool("listReminders", { from: `${nextYear}-03-10`, to: `${nextYear}-03-10` }),
+      says("You have one."),
+      callsTool("cancelReminder", { id: mine.id }),
+      says("I can't find that one.")
+    )
+    const chat = new Chat<AgentMessage>(
+      agentChat({
+        timezone: () => LAGOS,
+        fetch: async (url, init) => {
+          const headers = new Headers(init?.headers)
+          headers.set("cookie", visitorCookie(OTHER_VISITOR))
+          return POST(new Request(new URL(String(url), "http://localhost"), { ...init, headers }))
+        },
+      })
+    )
+
+    await chat.sendMessage({ text: "What's on March 10?" })
+    const listed = chat.messages.at(-1)!.parts.find((part) => part.type === "tool-listReminders")
+    await chat.sendMessage({ text: `Cancel ${mine.id}` })
+    const cancel = chat.messages.at(-1)!.parts.find((part) => part.type === "tool-cancelReminder")
+
+    expect(listed).toMatchObject({ state: "output-available", output: { reminders: [{ title: "Theirs" }] } })
+    expect(cancel).toMatchObject({ state: "output-denied", approval: { approved: false, reason: expect.stringContaining("No reminder has that id") } })
+    expect((await db.reminder.findUniqueOrThrow({ where: { id: mine.id } })).status).toBe("pending")
+  })
+
   test("the bar's own conversation goes through: it asks, you approve, and the reminder is saved", async () => {
     routeModel.current = fakeModel(
       callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }),
@@ -328,9 +357,12 @@ describe("the agent route", () => {
     const chat = new Chat<AgentMessage>(
       agentChat({
         timezone: () => LAGOS,
+        // The browser adds the visitor's cookie to each request; here the test does.
         fetch: async (url, init) => {
           sent.push(JSON.parse(String(init?.body)))
-          return POST(new Request(new URL(String(url), "http://localhost"), init))
+          const headers = new Headers(init?.headers)
+          headers.set("cookie", visitorCookie(TEST_VISITOR))
+          return POST(new Request(new URL(String(url), "http://localhost"), { ...init, headers }))
         },
       })
     )

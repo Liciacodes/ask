@@ -2,8 +2,7 @@ import { describe, expect, test } from "vitest"
 import { DELETE, PATCH } from "@/app/api/reminders/[id]/route"
 import { POST } from "@/app/api/reminders/route"
 import { db } from "@/lib/db"
-import { currentUserId } from "@/lib/user"
-import { context, nextYear, request, saveReminder, setUpTestDatabase } from "./helpers"
+import { context, nextYear, request, saveReminder, setUpTestDatabase, TEST_VISITOR } from "./helpers"
 
 setUpTestDatabase()
 
@@ -33,7 +32,7 @@ describe("POST /api/reminders", () => {
       created_at: expect.any(String),
     })
     const saved = await db.reminder.findUniqueOrThrow({ where: { id: body.id } })
-    expect(saved.userId).toBe(await currentUserId())
+    expect(saved.userId).toBe(TEST_VISITOR)
     expect(saved.dueAt.toISOString()).toBe(`${nextYear}-03-10T08:00:00.000Z`)
   })
 

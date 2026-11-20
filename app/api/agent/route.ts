@@ -4,7 +4,7 @@ import { agentStream, type AgentMessage } from "@/lib/agent/agent"
 import { agentModel } from "@/lib/agent/model"
 import { check } from "@/lib/api"
 import { weekQuery } from "@/lib/reminders"
-import { currentUserId } from "@/lib/user"
+import { noVisitor, visitorFrom } from "@/lib/visitor"
 
 const MAX_BODY = 100_000
 
@@ -15,6 +15,9 @@ const body = z.strictObject({
 })
 
 export async function POST(request: Request) {
+  const visitor = visitorFrom(request)
+  if (!visitor) return noVisitor()
+
   const text = await request.text()
   if (text.length > MAX_BODY) return Response.json({ error: "The conversation is too long to send" }, { status: 413 })
 
@@ -35,7 +38,7 @@ export async function POST(request: Request) {
   const stream = agentStream({
     model: agentModel(),
     messages: messages.data,
-    userId: await currentUserId(),
+    userId: visitor,
     timezone: zone.data.timezone,
     now: new Date(),
   })
