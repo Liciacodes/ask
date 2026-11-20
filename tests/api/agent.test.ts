@@ -590,8 +590,9 @@ describe("the agent route", () => {
     expect(await db.reminder.count()).toBe(0)
 
     await chat.addToolApprovalResponse({ id: (card as { approval: { id: string } }).approval.id, approved: true })
-    await vi.waitFor(() => expect(sent).toHaveLength(2))
-    await vi.waitFor(() => expect(chat.status).toBe("ready"))
+    // Saving takes a few trips to the test database, which can be slow.
+    await vi.waitFor(() => expect(sent).toHaveLength(2), { timeout: 5_000 })
+    await vi.waitFor(() => expect(chat.status).toBe("ready"), { timeout: 5_000 })
 
     expect(sent.map((body) => Object.keys(body).sort())).toEqual([["messages", "timezone"], ["messages", "timezone"]])
     expect(sent[0].timezone).toBe(LAGOS)
