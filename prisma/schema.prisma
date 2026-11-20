@@ -30,3 +30,16 @@ model Reminder {
   @@index([userId, dueAt])
   @@map("reminders")
 }
+
+// What Ask was used for on one day (UTC), for the daily limits. A visitor's row counts their questions;
+// the "site" row counts every call to the model, from everyone together, and the tokens those calls used.
+model DailyUsage {
+  day        DateTime @db.Date
+  subject    String
+  questions  Int      @default(0)
+  modelCalls Int      @default(0) @map("model_calls")
+  tokens     Int      @default(0)
+
+  @@id([day, subject])
+  @@map("daily_usage")
+}

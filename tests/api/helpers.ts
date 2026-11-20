@@ -22,7 +22,7 @@ function setUpTestDatabase() {
     }
   })
   beforeEach(async () => {
-    await db.$executeRaw`TRUNCATE TABLE reminders`
+    await db.$executeRaw`TRUNCATE TABLE reminders, daily_usage`
   })
   afterAll(async () => {
     await db.$disconnect()

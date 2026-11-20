@@ -12,7 +12,9 @@ import {
 import { cancelReminderInput, changeReminderInput, createReminderInput, listRemindersInput, restoreReminderInput } from "@/lib/agent-actions"
 import { remindersDue } from "@/lib/reminder-store"
 import { daysFrom, localDateTime, localDays } from "@/lib/time"
+import { noRoomIn } from "./limits"
 import { planChange, planCreate, planStatus, type AgentContext, type Plan, type Preview } from "./plans"
+import { problems } from "./problems"
 
 // The agent: a model with tools, through the AI SDK, with every action held for the person's OK.
 
@@ -103,21 +105,44 @@ function agentTools(context: AgentContext) {
 // and the reason the server turned an action down.
 type AgentMessage = UIMessage<never, { preview: Preview; refused: { reason: string } }, InferUITools<ReturnType<typeof agentTools>>>
 
-// Unexpected failures, like a call to Groq or the database going wrong, stay in the server log;
-// the bar, and the model on later turns, get a plain sentence.
-function failed(error: unknown) {
-  console.error("Agent request failed:", error)
-  return "Ask couldn't get an answer."
+type AgentOptions = {
+  model: LanguageModel
+  messages: AgentMessage[]
+  userId: string
+  timezone: string
+  now: Date
+  // Called once the reply has ended, if it stopped because Groq or the site had no room for it.
+  onNoRoom?: () => Promise<void>
 }
 
-type AgentOptions = { model: LanguageModel; messages: AgentMessage[]; userId: string; timezone: string; now: Date }
-
-function agentStream({ model, messages, userId, timezone, now }: AgentOptions) {
+function agentStream({ model, messages, userId, timezone, now, onNoRoom }: AgentOptions) {
   const context = { userId, timezone }
+  let noRoom = false
+
+  // Running out of room says so. Unexpected failures, like the database going wrong, stay in the server log;
+  // the bar, and the model on later turns, get a plain sentence.
+  const failed = (error: unknown) => {
+    const problem = noRoomIn(error)
+    if (problem) {
+      noRoom = true
+      console.warn(`Agent reply stopped: ${problem}`)
+      return problems[problem]
+    }
+    console.error("Agent request failed:", error)
+    return "Ask couldn't get an answer."
+  }
 
   return createUIMessageStream<AgentMessage>({
     originalMessages: messages,
     onError: failed,
+    onEnd: async () => {
+      if (!noRoom || !onNoRoom) return
+      try {
+        await onNoRoom()
+      } catch (error) {
+        console.error("Couldn't give the question back:", error)
+      }
+    },
     execute: async ({ writer }) => {
       // Runs before you see anything, and again when you approve: a plan the server would refuse is turned
       // down here, and only a plan that would succeed reaches you, as a preview card. If something changed

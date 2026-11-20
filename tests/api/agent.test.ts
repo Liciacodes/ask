@@ -1,5 +1,5 @@
 import { Chat } from "@ai-sdk/react"
-import { readUIMessageStream, simulateReadableStream } from "ai"
+import { readUIMessageStream } from "ai"
 import { MockLanguageModelV4 } from "ai/test"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { POST } from "@/app/api/agent/route"
@@ -8,6 +8,7 @@ import { agentChat } from "@/lib/agent/client"
 import { db } from "@/lib/db"
 import { localDateTime } from "@/lib/time"
 import { dateCases } from "../date-cases"
+import { callsTool, fakeModel, says } from "./fake-model"
 import { nextYear, OTHER_VISITOR, request, saveReminder, setUpTestDatabase, TEST_VISITOR, visitorCookie } from "./helpers"
 
 // The route asks lib/agent/model for its model; here it gets the scripted one, so no test reaches Groq.
@@ -15,32 +16,6 @@ const routeModel = vi.hoisted(() => ({ current: undefined as unknown }))
 vi.mock("@/lib/agent/model", () => ({ agentModel: () => routeModel.current }))
 
 setUpTestDatabase()
-
-// A scripted stand-in for the model: each entry is what it "says" on one step. No API is called.
-type Step = Extract<NonNullable<NonNullable<ConstructorParameters<typeof MockLanguageModelV4>[0]>["doStream"]>, unknown[]>[number]
-const usage = {
-  inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
-  outputTokens: { total: 5, text: 5, reasoning: undefined },
-}
-const callsTool = (toolName: string, input: object): Step => ({
-  stream: simulateReadableStream({
-    chunks: [
-      { type: "tool-call" as const, toolCallId: `call-${toolName}`, toolName, input: JSON.stringify(input) },
-      { type: "finish" as const, finishReason: { unified: "tool-calls" as const, raw: undefined }, usage },
-    ],
-  }),
-})
-const says = (text: string): Step => ({
-  stream: simulateReadableStream({
-    chunks: [
-      { type: "text-start" as const, id: "text-1" },
-      { type: "text-delta" as const, id: "text-1", delta: text },
-      { type: "text-end" as const, id: "text-1" },
-      { type: "finish" as const, finishReason: { unified: "stop" as const, raw: undefined }, usage },
-    ],
-  }),
-})
-const fakeModel = (...steps: Step[]) => new MockLanguageModelV4({ doStream: steps })
 
 const LAGOS = "Africa/Lagos"
 const asking = (text: string): AgentMessage => ({ id: "you", role: "user", parts: [{ type: "text", text }] })

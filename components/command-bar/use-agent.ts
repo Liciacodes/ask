@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import type { AgentMessage } from "@/lib/agent/agent"
 import { agentChat } from "@/lib/agent/client"
 import type { Preview } from "@/lib/agent/plans"
+import { isReplyProblem } from "@/lib/agent/problems"
 import type { ReminderJson } from "@/lib/reminders"
 
 type Done = { done: Preview["action"]; reminder: ReminderJson }
@@ -17,13 +18,15 @@ const isAction = (part: Part): part is ActionPart => actions.has(part.type)
 
 const options = agentChat({ timezone: () => Intl.DateTimeFormat().resolvedOptions().timeZone })
 
-// The server's error text is JSON for a refused request, and a plain sentence for a failure mid-reply.
+// The server's error text is JSON for a refused request, and a plain sentence for a failure mid-reply:
+// one about room (Groq busy, today's calls used up) is shown as it is.
 function problemOf(error: Error | undefined) {
   if (!error) return null
   try {
     const { error: message } = JSON.parse(error.message) as { error?: unknown }
     if (typeof message === "string") return message
   } catch {}
+  if (isReplyProblem(error.message)) return error.message
   return "Ask couldn't get an answer. Check your connection and ask again."
 }
 

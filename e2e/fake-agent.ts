@@ -33,6 +33,12 @@ const refused = (reason: string, toolCallId = "call-1"): Chunk[] => [
   { type: "tool-output-denied", toolCallId },
 ]
 
+// The reply stops before a word of it: what the route sends when Groq, or the site's day, has no room for the call.
+const stopsWith = (errorText: string): Chunk[] => [
+  { type: "start", messageId: "reply-1" },
+  { type: "error", errorText },
+]
+
 const turn = (...pieces: Chunk[][]): Chunk[] => [
   { type: "start", messageId: "reply-1" },
   { type: "start-step" },
@@ -62,4 +68,4 @@ async function fakeAgent(page: Page, ...answers: Answer[]) {
   return requests
 }
 
-export { declined, did, fakeAgent, proposes, refused, says, turn, type Sent }
+export { declined, did, fakeAgent, proposes, refused, says, stopsWith, turn, type Sent }

@@ -1,6 +1,7 @@
 import { createUIMessageStreamResponse, safeValidateUIMessages } from "ai"
 import { z } from "zod"
 import { agentStream, type AgentMessage } from "@/lib/agent/agent"
+import { countedModel, isNewQuestion, takeQuestion } from "@/lib/agent/limits"
 import { agentModel } from "@/lib/agent/model"
 import { check } from "@/lib/api"
 import { weekQuery } from "@/lib/reminders"
@@ -35,12 +36,17 @@ export async function POST(request: Request) {
   const messages = await safeValidateUIMessages<AgentMessage>({ messages: parsed.data.messages })
   if (!messages.success) return Response.json({ error: "Those messages aren't in a shape Ask can read" }, { status: 400 })
 
+  // A new question is turned away here, before any model call, once today's limits are reached.
+  const question = isNewQuestion(messages.data) ? await takeQuestion(visitor, zone.data.timezone) : undefined
+  if (question && !question.ok) return question.response
+
   const stream = agentStream({
-    model: agentModel(),
+    model: countedModel(agentModel()),
     messages: messages.data,
     userId: visitor,
     timezone: zone.data.timezone,
     now: new Date(),
+    onNoRoom: question?.giveBack,
   })
   return createUIMessageStreamResponse({ stream })
 }

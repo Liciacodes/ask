@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test"
-import { declined, did, fakeAgent, proposes, refused, says, turn } from "./fake-agent"
+import { problems, usedUp } from "@/lib/agent/problems"
+import { declined, did, fakeAgent, proposes, refused, says, stopsWith, turn } from "./fake-agent"
 import { addTextField, bar, commands, expectHighlighted, goHome, openBar, openShortcut, reminder, search, status } from "./helpers"
 
 test.use({ timezoneId: "Africa/Lagos", locale: "en-GB" })
@@ -268,6 +269,30 @@ test("a lost connection says so in plain words", async ({ page }) => {
   await ask(page, "what's on today?")
 
   await expect(conversation(page).getByRole("alert")).toHaveText("Ask couldn't get an answer. Check your connection and ask again.")
+})
+
+test("when Groq is busy, the reply says so in plain words, and you can ask again", async ({ page }) => {
+  const requests = await fakeAgent(page, stopsWith(problems.busy), turn(says("Here you go.")))
+  await goHome(page)
+  await ask(page, "what's on today?")
+
+  await expect(conversation(page).getByRole("alert")).toHaveText("Ask is busy right now. Try again in a minute.")
+  await page.keyboard.type("try again")
+  await page.keyboard.press("Enter")
+
+  await expect(conversation(page).getByText("Here you go.")).toBeVisible()
+  await expect(conversation(page).getByRole("alert")).toHaveCount(0)
+  expect(requests).toHaveLength(2)
+})
+
+test("today's limit says when you can ask again", async ({ page }) => {
+  await fakeAgent(page, { status: 429, body: JSON.stringify({ error: usedUp.visitor(10, "01:00") }) })
+  await goHome(page)
+  await ask(page, "what's on today?")
+
+  await expect(conversation(page).getByRole("alert")).toHaveText(
+    "You've used today's 10 questions. You can ask again from 01:00. Create reminder still works."
+  )
 })
 
 test("closing the bar forgets the conversation", async ({ page }) => {
