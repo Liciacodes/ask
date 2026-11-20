@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, beforeEach } from "vitest"
 import { db } from "@/lib/db"
 import type { Prisma } from "@/lib/generated/prisma/client"
+import { instantAt } from "@/lib/time"
 import { LOCAL_COOKIE } from "@/lib/visitor"
+import type { Saved } from "../agent-cases"
 
 // The visitor every test acts as, unless it says otherwise, and a second one to check they stay apart.
 const TEST_VISITOR = "11111111-1111-4111-8111-111111111111"
@@ -54,4 +56,14 @@ async function saveReminder(data: Partial<Prisma.ReminderUncheckedCreateInput> =
   })
 }
 
-export { context, nextYear, OTHER_VISITOR, request, saveReminder, setUpTestDatabase, TEST_VISITOR, visitorCookie }
+// The reminders a test sentence starts from, saved for the test visitor. Returns each one's id by its title.
+async function saveAll(saved: Saved[] = [], timezone: string) {
+  const ids = new Map<string, string>()
+  for (const { title, date, time, status } of saved) {
+    const reminder = await saveReminder({ title, dueAt: instantAt(date, time, timezone), timezone, status })
+    ids.set(title, reminder.id)
+  }
+  return ids
+}
+
+export { context, nextYear, OTHER_VISITOR, request, saveAll, saveReminder, setUpTestDatabase, TEST_VISITOR, visitorCookie }

@@ -7,6 +7,10 @@ export default defineConfig({
     include: ["tests/live/**/*.live.ts"],
     setupFiles: ["tests/setup.ts"],
     fileParallelism: false,
-    testTimeout: 60_000,
+    // Prints what the model did with every sentence, passed or not.
+    silent: false,
+    // A sentence can wait for room under Groq's per-minute limit before each of its calls.
+    testTimeout: 300_000,
+    hookTimeout: 60_000,
   },
 })

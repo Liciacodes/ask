@@ -7,9 +7,9 @@ import { agentStream, MAX_STEPS, type AgentMessage } from "@/lib/agent/agent"
 import { agentChat } from "@/lib/agent/client"
 import { db } from "@/lib/db"
 import { localDateTime } from "@/lib/time"
-import { dateCases } from "../date-cases"
+import { agentCases, type AgentCase, type Expected, type Saved } from "../agent-cases"
 import { callsTool, fakeModel, says } from "./fake-model"
-import { nextYear, OTHER_VISITOR, request, saveReminder, setUpTestDatabase, TEST_VISITOR, visitorCookie } from "./helpers"
+import { nextYear, OTHER_VISITOR, request, saveAll, saveReminder, setUpTestDatabase, TEST_VISITOR, visitorCookie } from "./helpers"
 
 // The route asks lib/agent/model for its model; here it gets the scripted one, so no test reaches Groq.
 const routeModel = vi.hoisted(() => ({ current: undefined as unknown }))
@@ -200,17 +200,17 @@ describe("changing", () => {
   })
 })
 
+const calendarIn = (model: MockLanguageModelV4) => {
+  const system = model.doStreamCalls[0].prompt.find((message) => message.role === "system")
+  return String(system?.content)
+    .split("\n")
+    .filter((line) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{4}-\d{2}-\d{2}/.test(line))
+}
+
 describe("dates", () => {
   afterEach(() => {
     vi.useRealTimers()
   })
-
-  const calendarIn = (model: MockLanguageModelV4) => {
-    const system = model.doStreamCalls[0].prompt.find((message) => message.role === "system")
-    return String(system?.content)
-      .split("\n")
-      .filter((line) => /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{4}-\d{2}-\d{2}/.test(line))
-  }
 
   test("the model gets the next 14 days with their weekdays, from today, across the end of the month", async () => {
     const model = fakeModel(says("OK."))
@@ -231,29 +231,110 @@ describe("dates", () => {
     expect(calendarIn(model)[0]).toBe("Thu 2026-11-19 (today)")
   })
 
-  test.each(dateCases)("for “$say”, the model is handed $weekday $expected.date instead of working it out", async (dateCase) => {
-    const model = fakeModel(says("OK."))
+})
 
-    await run(model, [asking(dateCase.say)], { now: new Date(dateCase.now), timezone: dateCase.timezone })
-
-    expect(calendarIn(model)).toContain(`${dateCase.weekday} ${dateCase.expected.date}`)
+// Each expected answer in tests/agent-cases.ts, sent through the server with a scripted model: the card the person
+// would see, and what's saved once they say yes. `npm run test:live` checks the real model gives these answers.
+describe("the test sentences", () => {
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  test.each(dateCases)("the expected answer to “$say” previews and saves $expected.date at $expected.time", async (dateCase) => {
-    // The server checks the time is in the future, so the clock reads the moment the sentence was typed.
+  type Case<Does extends Expected["does"]> = AgentCase & { expect: Extract<Expected, { does: Does }> }
+  const casesThat = <Does extends Expected["does"]>(...does: Does[]) =>
+    agentCases.filter((agentCase): agentCase is Case<Does> => (does as string[]).includes(agentCase.expect.does))
+
+  // The clock reads the moment the sentence was typed, so each case means the same on any day.
+  async function typed(agentCase: AgentCase) {
     vi.useFakeTimers({ toFake: ["Date"] })
-    vi.setSystemTime(new Date(dateCase.now))
-    const at = { now: new Date(dateCase.now), timezone: dateCase.timezone }
-    const question = asking(dateCase.say)
-    const model = fakeModel(callsTool("createReminder", { title: "Go for a run", ...dateCase.expected }), says("Saved."))
+    vi.setSystemTime(new Date(agentCase.now))
+    const ids = await saveAll(agentCase.saved, agentCase.timezone)
+    const at = { now: new Date(agentCase.now), timezone: agentCase.timezone }
+    return { ids, at, question: asking(agentCase.say) }
+  }
+
+  const weekdayOf = (date: string) => new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`))
+  const card = (saved: Saved) => ({ title: saved.title, description: null, date: saved.date, time: saved.time })
+
+  test("there are 30", () => {
+    expect(agentCases).toHaveLength(30)
+  })
+
+  test.each(casesThat("create"))("“$say” previews and saves $expect.reminder.date at $expect.reminder.time", async (agentCase) => {
+    const { at, question } = await typed(agentCase)
+    const { reminder, savedAt } = agentCase.expect
+    const model = fakeModel(callsTool("createReminder", reminder), says("Saved."))
 
     const proposed = await run(model, [question], at)
     await run(model, [question, answer(proposed, true)], at)
 
-    expect(previews(proposed)).toEqual([{ action: "create", reminder: { title: "Go for a run", description: null, ...dateCase.expected } }])
+    expect(previews(proposed)).toEqual([{ action: "create", reminder: { description: null, ...reminder } }])
     const saved = await db.reminder.findFirstOrThrow()
-    expect(saved.dueAt.toISOString()).toBe(dateCase.savedAt)
-    expect(localDateTime(saved.dueAt, dateCase.timezone)).toEqual(dateCase.expected)
+    expect(saved).toMatchObject({ title: reminder.title, description: reminder.description ?? null, timezone: agentCase.timezone })
+    expect(saved.dueAt.toISOString()).toBe(savedAt)
+    // A date in the next 14 days is handed to the model with its weekday, so the model never works it out.
+    const calendar = calendarIn(model)
+    const inCalendar = reminder.date <= calendar.at(-1)!.slice(4, 14)
+    expect(calendar.some((line) => line.startsWith(`${weekdayOf(reminder.date)} ${reminder.date}`))).toBe(inCalendar)
+  })
+
+  test.each(casesThat("change"))("“$say” previews $expect.reminder before and after, and saying yes saves it", async (agentCase) => {
+    const { ids, at, question } = await typed(agentCase)
+    const { reminder, input, after } = agentCase.expect
+    const id = ids.get(reminder)!
+    const model = fakeModel(callsTool("changeReminder", { id, ...input }), says("Changed."))
+
+    const proposed = await run(model, [question], at)
+    await run(model, [question, answer(proposed, true)], at)
+
+    const was = agentCase.saved!.find((saved) => saved.title === reminder)!
+    expect(previews(proposed)).toEqual([{ action: "change", before: card(was), after: { description: null, ...after } }])
+    const saved = await db.reminder.findUniqueOrThrow({ where: { id } })
+    expect({ title: saved.title, ...localDateTime(saved.dueAt, agentCase.timezone) }).toEqual(after)
+  })
+
+  test.each(casesThat("cancel", "restore"))("“$say” previews $expect.reminder to $expect.does, and saying yes does it", async (agentCase) => {
+    const { ids, at, question } = await typed(agentCase)
+    const { reminder, does } = agentCase.expect
+    const id = ids.get(reminder)!
+    const model = fakeModel(callsTool(`${does}Reminder`, { id }), says("Done."))
+
+    const proposed = await run(model, [question], at)
+    await run(model, [question, answer(proposed, true)], at)
+
+    expect(previews(proposed)).toEqual([{ action: does, reminder: card(agentCase.saved!.find((saved) => saved.title === reminder)!) }])
+    expect((await db.reminder.findUniqueOrThrow({ where: { id } })).status).toBe(does === "cancel" ? "cancelled" : "pending")
+  })
+
+  test.each(casesThat("list"))("“$say” lists $expect.from to $expect.to and proposes nothing", async (agentCase) => {
+    const { at, question } = await typed(agentCase)
+    const { from, to, finds } = agentCase.expect
+    const model = fakeModel(callsTool("listReminders", { from, to }), says("Here's what you have."))
+
+    const reply = await run(model, [question], at)
+
+    const [list] = toolParts(reply)
+    expect(list.state).toBe("output-available")
+    expect((list.output!.reminders as { title: string }[]).map((found) => found.title)).toEqual(finds)
+    expect(previews(reply)).toEqual([])
+  })
+
+  test.each(casesThat("ask", "refuse"))("“$say” shows no card and changes nothing", async (agentCase) => {
+    const { ids, at, question } = await typed(agentCase)
+    const expected = agentCase.expect
+    const tries = "tries" in expected ? expected.tries : undefined
+    const before = await db.reminder.findMany()
+    const model = fakeModel(
+      ...(tries ? [callsTool(tries.tool, { ...tries.input, ...(tries.on && { id: ids.get(tries.on) }) })] : []),
+      says(expected.says)
+    )
+
+    const reply = await run(model, [question], at)
+
+    expect(previews(reply)).toEqual([])
+    if (tries) expect(reply.parts).toContainEqual({ type: "data-refused", id: `call-${tries.tool}`, data: { reason: tries.reason } })
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: expected.says })
+    expect(await db.reminder.findMany()).toEqual(before)
   })
 })
 
