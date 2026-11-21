@@ -4,7 +4,7 @@
 const STILL_WORKS = "Create reminder still works."
 
 const problems = {
-  busy: "Lots of people are trying Ask right now. Try again in a minute. The New reminder form still works.",
+  busy: `Lots of people are trying Ask right now. Try again in a minute. ${STILL_WORKS}`,
   siteUsedUp: `Ask has answered all it can for today. ${STILL_WORKS}`,
 }
 

@@ -276,7 +276,7 @@ test("when Groq is busy, the reply says so in plain words, and you can ask again
   await goHome(page)
   await ask(page, "what's on today?")
 
-  await expect(conversation(page).getByRole("alert")).toHaveText("Lots of people are trying Ask right now. Try again in a minute. The New reminder form still works.")
+  await expect(conversation(page).getByRole("alert")).toHaveText("Lots of people are trying Ask right now. Try again in a minute. Create reminder still works.")
   await page.keyboard.type("try again")
   await page.keyboard.press("Enter")
 
