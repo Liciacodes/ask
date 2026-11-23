@@ -33,6 +33,22 @@ async function fakeSave(page: Page, answer: (route: Route, sent: Sent) => Promis
   return requests
 }
 
+type Move = { id: string; due_at: string }
+
+// Answers PATCH /api/reminders/:id in the browser, by default with the week's reminder at its new time.
+async function fakeMove(page: Page, week: ReminderJson[], answer?: (route: Route, sent: Move) => Promise<void>) {
+  const requests: Move[] = []
+  await page.route("**/api/reminders/*", async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback()
+    const sent = { id: route.request().url().split("/").pop()!, ...(route.request().postDataJSON() as { due_at: string }) }
+    requests.push(sent)
+    if (answer) return answer(route, sent)
+    const was = week.find((reminder) => reminder.id === sent.id)!
+    await route.fulfill({ json: { ...was, due_at: sent.due_at } })
+  })
+  return requests
+}
+
 const saved = (route: Route, sent: Sent) =>
   route.fulfill({ status: 201, json: reminder(sent.title, sent.due_at, { timezone: sent.timezone, created_at: "2026-11-18T09:20:00.000Z" }) })
 
@@ -48,8 +64,9 @@ async function goHome(page: Page, week: ReminderJson[] | "already faked" = []) {
 
 const bar = (page: Page) => page.getByRole("dialog", { name: "Ask" })
 const search = (page: Page) => page.getByRole("combobox")
-const commands = (page: Page) => page.getByRole("option")
-const command = (page: Page, name: string) => page.getByRole("option", { name, exact: true })
+// The bar's own options: the week's cards are options too.
+const commands = (page: Page) => bar(page).getByRole("option")
+const command = (page: Page, name: string) => bar(page).getByRole("option", { name, exact: true })
 const status = (page: Page) => page.getByRole("region", { name: "This week" }).getByRole("status")
 
 async function addTextField(page: Page) {
@@ -80,7 +97,7 @@ async function openForm(page: Page) {
 
 async function expectHighlighted(page: Page, option: Locator) {
   await expect(option).toHaveAttribute("aria-selected", "true")
-  await expect(page.getByRole("option", { selected: true })).toHaveCount(1)
+  await expect(bar(page).getByRole("option", { selected: true })).toHaveCount(1)
   const id = await option.getAttribute("id")
   expect(id).toBeTruthy()
   await expect(search(page)).toHaveAttribute("aria-activedescendant", id!)
@@ -92,6 +109,7 @@ export {
   command,
   commands,
   expectHighlighted,
+  fakeMove,
   fakeSave,
   fakeWeek,
   goHome,
@@ -104,5 +122,6 @@ export {
   segment,
   status,
   title,
+  type Move,
   type Sent,
 }

@@ -27,16 +27,6 @@ function weekDays(now: Date, timeZone: string) {
   return { from, to, days, range }
 }
 
-function remindersByDay(reminders: ReminderJson[], timeZone: string) {
-  const sorted = [...reminders].sort((a, b) => a.due_at.localeCompare(b.due_at) || a.created_at.localeCompare(b.created_at))
-  const byDay = new Map<string, ReminderJson[]>()
-  for (const reminder of sorted) {
-    const key = dayKey(new Date(reminder.due_at), timeZone)
-    byDay.set(key, [...(byDay.get(key) ?? []), reminder])
-  }
-  return byDay
-}
-
 const timeOf = (reminder: ReminderJson, timeZone: string) =>
   format(new Date(reminder.due_at), timeZone, { timeStyle: "short" })
 
@@ -55,4 +45,4 @@ function localWhen({ date, time }: { date: string; time: string }) {
   }
 }
 
-export { localWhen, remindersByDay, timeOf, weekDays, whenOf, type Day }
+export { dayKey, localWhen, timeOf, weekDays, whenOf, type Day }

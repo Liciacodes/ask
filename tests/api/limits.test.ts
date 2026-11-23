@@ -146,6 +146,8 @@ describe("each visitor's questions", () => {
     expect(statuses).toEqual([200, 200])
     expect(await db.reminder.count()).toBe(1)
     expect(await usage(TEST_VISITOR)).toMatchObject({ questions: 1 })
+    // Answering the card asks the model nothing, so it costs none of the site's calls either.
+    expect(await usage("site")).toMatchObject({ modelCalls: 1 })
     expect((await ask()).status).toBe(429)
   })
 

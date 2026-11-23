@@ -1,6 +1,3 @@
-import type { LanguageModelMiddleware } from "ai"
-import type { StreamPart } from "./limits"
-
 // Models name the wrong weekday for a date: "Friday December 1st" for a Tuesday, "Thursday 23 November" for a Monday.
 // The server knows the calendar, so wherever a reply puts a weekday next to a date, the weekday becomes the date's own.
 
@@ -48,33 +45,4 @@ function rightWeekdays(text: string, today: string, onFix: (fix: string) => void
     .replace(MONTH_FIRST, (match, written, month, day, year) => fix(match, written, day, month, year))
 }
 
-// Holds each piece of the model's text until it's complete, then puts its weekdays right. Replies are a sentence or
-// two, so the hold is a fraction of a second.
-function weekdaysPutRight(today: string): LanguageModelMiddleware {
-  return {
-    wrapStream: async ({ doStream }) => {
-      const { stream, ...rest } = await doStream()
-      const held = new Map<string, string>()
-      const corrected = (text: string) => rightWeekdays(text, today, (fix) => console.info(`Put a weekday right: ${fix}`))
-      const fixing = new TransformStream<StreamPart, StreamPart>({
-        transform(part, controller) {
-          if (part.type === "text-delta") {
-            held.set(part.id, (held.get(part.id) ?? "") + part.delta)
-            return
-          }
-          if (part.type === "text-end" && held.has(part.id)) {
-            controller.enqueue({ type: "text-delta", id: part.id, delta: corrected(held.get(part.id)!) })
-            held.delete(part.id)
-          }
-          controller.enqueue(part)
-        },
-        flush(controller) {
-          for (const [id, text] of held) controller.enqueue({ type: "text-delta", id, delta: corrected(text) })
-        },
-      })
-      return { ...rest, stream: stream.pipeThrough(fixing) }
-    },
-  }
-}
-
-export { rightWeekdays, weekdaysPutRight }
+export { rightWeekdays }

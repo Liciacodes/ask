@@ -1,8 +1,9 @@
 // Real Groq calls, on the sentences in tests/agent-cases.ts: run `npm run test:live` only when the person paying says yes.
 // Its own config keeps it out of `npm run test:api` and CI.
 //
-// All 30 take about 50 calls and 120,000 tokens, over half of Groq's free day, and the live site shares that
-// allowance. Run them when the site is quiet, or a few at a time: `npm run test:live -- -t "dentist"`.
+// All 32 take about 52 calls and, at the last live run's 1,150 tokens in and up to 180 out a call, about 70,000
+// tokens: a third of Groq's free day, which the live site shares. Run them when the site is quiet, or a few at a
+// time: `npm run test:live -- -t "dentist"`.
 import { APICallError, readUIMessageStream, wrapLanguageModel, type LanguageModelMiddleware } from "ai"
 import { afterEach, expect, test, vi } from "vitest"
 import { agentStream, type AgentMessage } from "@/lib/agent/agent"
@@ -113,13 +114,14 @@ test.each(agentCases)("the real model answers “$say” with: $expect.does", as
   let reply: AgentMessage | undefined
   for await (const message of readUIMessageStream<AgentMessage>({ stream })) reply = message
 
-  // What the person would see: the cards, the lists the model looked at, and its words.
+  // What the person would see: the cards, the lists the model looked at, why it didn't understand, and its words.
   const parts = reply?.parts ?? []
   const cards = parts.flatMap((part) => (part.type === "data-preview" ? [part.data as Preview] : []))
   const lists = parts.flatMap((part) => (part.type === "tool-listReminders" && "input" in part && part.input ? [part.input] : []))
   const tried = parts.filter((part) => actions.has(part.type)).map((part) => ("input" in part ? { [part.type]: part.input } : part.type))
+  const notUnderstood = parts.flatMap((part) => (part.type === "tool-didNotUnderstand" && "input" in part && part.input ? [part.input.reason] : []))
   const text = parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ")
-  const did = JSON.stringify({ cards, lists, tried, text })
+  const did = JSON.stringify({ cards, lists, tried, notUnderstood, text })
   console.log(`“${agentCase.say}” → ${did}\n  ${costOf(cost)}`)
 
   const expected = agentCase.expect
@@ -160,6 +162,11 @@ test.each(agentCases)("the real model answers “$say” with: $expect.does", as
       break
     case "refuse":
       expect(cards, did).toEqual([])
+      break
+    case "notUnderstood":
+      expect(cards, did).toEqual([])
+      // Gibberish and too vague are close, so either is right for both; off topic must be off topic.
+      expect(notUnderstood, did).toEqual([expected.reason === "off-topic" ? "off-topic" : expect.stringMatching(/^(gibberish|too-vague)$/)])
       break
   }
 })

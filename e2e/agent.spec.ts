@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
+import { examples } from "@/lib/agent/not-understood"
 import { problems, usedUp } from "@/lib/agent/problems"
-import { declined, did, fakeAgent, proposes, refused, says, stopsWith, turn } from "./fake-agent"
+import { declined, did, doesNotUnderstand, fakeAgent, proposes, refused, says, stopsWith, turn } from "./fake-agent"
 import { addTextField, bar, commands, expectHighlighted, goHome, openBar, openShortcut, reminder, search, status } from "./helpers"
 
 test.use({ timezoneId: "Africa/Lagos", locale: "en-GB" })
@@ -76,15 +77,11 @@ test("an action waits for your OK on a preview card, and nothing is sent until y
   await expect(followUp(page)).toHaveAttribute("readonly", "")
   await expect(followUp(page)).toHaveAccessibleDescription("Enter: Save. Escape: Don't save.")
   expect(requests).toHaveLength(1)
-  await expect(day(page, "Friday 20 November").getByRole("listitem")).toHaveCount(0)
+  await expect(day(page, "Friday 20 November").getByRole("option")).toHaveCount(0)
 })
 
-test("Enter on the card says yes: the reminder is saved, and the week shows it with the highlighter", async ({ page }) => {
-  const requests = await fakeAgent(
-    page,
-    turn(proposes("createReminder", callMumInput, callMum)),
-    turn(did("create", savedCallMum), says("Saved it for Friday at 18:00."))
-  )
+test("Enter on the card says yes: the reminder is saved, the bar says so in its own words, and the week shows it", async ({ page }) => {
+  const requests = await fakeAgent(page, turn(proposes("createReminder", callMumInput, callMum)), turn(did("create", savedCallMum)))
   await goHome(page)
   await ask(page, "remind me to call mum friday at 6")
   await expect(card(page, "New reminder")).toBeVisible()
@@ -92,12 +89,12 @@ test("Enter on the card says yes: the reminder is saved, and the week shows it w
   await page.keyboard.press("Enter")
 
   await expect(card(page, "New reminder")).toContainText("Saved")
-  await expect(conversation(page).getByText("Saved it for Friday at 18:00.")).toBeVisible()
+  await expect(conversation(page).getByText("Saved: Call mum, Friday 20 Nov, 18:00")).toBeVisible()
   expect(requests).toHaveLength(2)
   const answered = requests[1].messages.at(-1)!.parts.find((part) => part.type === "tool-createReminder")
   expect(answered).toMatchObject({ state: "approval-responded", approval: { id: "approval-call-1", approved: true } })
 
-  const friday = day(page, "Friday 20 November").getByRole("listitem")
+  const friday = day(page, "Friday 20 November").getByRole("option")
   await expect(friday).toHaveCount(1)
   await expect(friday).toContainText("Call mum")
   await expect(friday.locator("[data-marker]")).toHaveCount(1)
@@ -106,12 +103,8 @@ test("Enter on the card says yes: the reminder is saved, and the week shows it w
   await expect(hints(page)).toHaveText(["↵send", "escback"])
 })
 
-test("Esc on the card says no: nothing is saved, and the model is told", async ({ page }) => {
-  const requests = await fakeAgent(
-    page,
-    turn(proposes("createReminder", callMumInput, callMum)),
-    turn(declined(), says("OK, I won't save it."))
-  )
+test("Esc on the card says no: nothing is saved, the server hears it, and no words follow the card", async ({ page }) => {
+  const requests = await fakeAgent(page, turn(proposes("createReminder", callMumInput, callMum)), turn(declined()))
   await goHome(page)
   await ask(page, "remind me to call mum friday at 6")
   await expect(card(page, "New reminder")).toBeVisible()
@@ -119,16 +112,16 @@ test("Esc on the card says no: nothing is saved, and the model is told", async (
   await page.keyboard.press("Escape")
 
   await expect(card(page, "New reminder")).toContainText("Not saved")
-  await expect(conversation(page).getByText("OK, I won't save it.")).toBeVisible()
+  await expect(conversation(page).locator("section + p")).toHaveCount(0)
   await expect(bar(page)).toBeVisible()
   const answered = requests[1].messages.at(-1)!.parts.find((part) => part.type === "tool-createReminder")
   expect(answered).toMatchObject({ state: "approval-responded", approval: { approved: false } })
-  await expect(day(page, "Friday 20 November").getByRole("listitem")).toHaveCount(0)
+  await expect(day(page, "Friday 20 November").getByRole("option")).toHaveCount(0)
   await expect(status(page)).toBeEmpty()
 })
 
 test("the card's buttons answer it with a pointer too, and the cursor goes back to the follow-up", async ({ page }) => {
-  const requests = await fakeAgent(page, turn(proposes("createReminder", callMumInput, callMum)), turn(declined(), says("OK.")))
+  const requests = await fakeAgent(page, turn(proposes("createReminder", callMumInput, callMum)), turn(declined()))
   await goHome(page)
   await ask(page, "remind me to call mum friday at 6")
 
@@ -152,7 +145,7 @@ test("a change shows before and after, and approving moves the card to its new d
   await fakeAgent(
     page,
     turn(proposes("changeReminder", { id: dentist.id, date: "2026-11-19" }, change)),
-    turn(did("change", moved), says("Moved to Thursday."))
+    turn(did("change", moved))
   )
   await goHome(page, [dentist])
   await ask(page, "move the dentist to tomorrow")
@@ -166,8 +159,9 @@ test("a change shows before and after, and approving moves the card to its new d
   await page.keyboard.press("Enter")
 
   await expect(preview).toContainText("Changed")
-  await expect(day(page, "Wednesday 18 November").getByRole("listitem")).toHaveCount(0)
-  await expect(day(page, "Thursday 19 November").getByRole("listitem")).toContainText("Dentist")
+  await expect(conversation(page).getByText("Changed: Dentist, Thursday 19 Nov, 09:00")).toBeVisible()
+  await expect(day(page, "Wednesday 18 November").getByRole("option")).toHaveCount(0)
+  await expect(day(page, "Thursday 19 November").getByRole("option")).toContainText("Dentist")
   await expect(status(page)).toHaveText("Changed Dentist, now Thu 19 Nov, 09:00")
 })
 
@@ -177,7 +171,7 @@ test("cancelling takes the card out of the week", async ({ page }) => {
   await fakeAgent(
     page,
     turn(proposes("cancelReminder", { id: dentist.id }, cancel)),
-    turn(did("cancel", { ...dentist, status: "cancelled" }), says("Cancelled."))
+    turn(did("cancel", { ...dentist, status: "cancelled" }))
   )
   await goHome(page, [dentist])
   await ask(page, "cancel the dentist")
@@ -186,7 +180,8 @@ test("cancelling takes the card out of the week", async ({ page }) => {
   await page.keyboard.press("Enter")
 
   await expect(card(page, "Cancel reminder")).toContainText("Cancelled")
-  await expect(day(page, "Wednesday 18 November").getByRole("listitem")).toHaveCount(0)
+  await expect(conversation(page).getByText("Cancelled: Dentist, Wednesday 18 Nov, 09:00")).toBeVisible()
+  await expect(day(page, "Wednesday 18 November").getByRole("option")).toHaveCount(0)
   await expect(status(page)).toHaveText("Cancelled Dentist")
 })
 
@@ -194,7 +189,7 @@ test("if the server turns your yes down, the card says why instead of pretending
   const dentist = reminder("Dentist", "2026-11-18T08:00:00.000Z")
   const cancel = { action: "cancel", reminder: { title: "Dentist", description: null, date: "2026-11-18", time: "09:00" } } as const
   const reason = "This reminder was already sent, so it can't be cancelled."
-  await fakeAgent(page, turn(proposes("cancelReminder", { id: dentist.id }, cancel)), turn(refused(reason), says("It went out just now.")))
+  await fakeAgent(page, turn(proposes("cancelReminder", { id: dentist.id }, cancel)), turn(refused(reason)))
   await goHome(page, [dentist])
   await ask(page, "cancel the dentist")
   await expect(card(page, "Cancel reminder")).toBeVisible()
@@ -203,7 +198,7 @@ test("if the server turns your yes down, the card says why instead of pretending
 
   await expect(card(page, "Cancel reminder").getByRole("alert")).toHaveText(reason)
   await expect(card(page, "Cancel reminder")).not.toContainText("Kept")
-  await expect(day(page, "Wednesday 18 November").getByRole("listitem")).toContainText("Dentist")
+  await expect(day(page, "Wednesday 18 November").getByRole("option")).toContainText("Dentist")
   await expect(status(page)).toBeEmpty()
 })
 
@@ -317,4 +312,27 @@ test("a test that forgets to fake /api/agent never reaches a server", async ({ p
   const sent = await page.evaluate(() => fetch("/api/agent", { method: "POST", body: "{}" }).then(() => "reached a server", () => "blocked"))
 
   expect(sent).toBe("blocked")
+})
+
+test("a message Ask doesn't understand says so, offers sentences to try, and gives your words back to fix", async ({ page }) => {
+  const requests = await fakeAgent(page, turn(doesNotUnderstand("gibberish")), turn(says("You have nothing on Friday.")))
+  await goHome(page)
+  await openBar(page)
+  await page.keyboard.type("asdfgh")
+  await page.keyboard.press("Enter")
+
+  await expect(conversation(page).getByText("I didn't understand that. Try something like:")).toBeVisible()
+  for (const example of examples) await expect(conversation(page).getByText(`“${example}”`)).toBeVisible()
+  await expect(followUp(page)).toBeFocused()
+  await expect(followUp(page)).toHaveValue("asdfgh")
+  expect(await followUp(page).evaluate((field: HTMLInputElement) => [field.selectionStart, field.selectionEnd])).toEqual([6, 6])
+
+  // Fixing it in place, rather than typing it all again.
+  await page.keyboard.press("Shift+Home")
+  await page.keyboard.type("What's on Friday?")
+  await page.keyboard.press("Enter")
+
+  await expect(conversation(page).getByText("You have nothing on Friday.")).toBeVisible()
+  expect(requests[1].messages.filter((message) => message.role === "user").map(textOf)).toEqual(["asdfgh", "What's on Friday?"])
+  await expect(followUp(page)).toHaveValue("")
 })

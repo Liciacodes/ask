@@ -145,6 +145,17 @@ describe("PATCH /api/reminders/:id", () => {
     expect((await change(reminder.id, { due_at: "2020-01-01T09:00:00Z" })).status).toBe(400)
   })
 
+  // What the week shows when it has to put a dragged card back.
+  test("moving a reminder to a time that has just passed says why, and leaves it where it was", async () => {
+    const reminder = await saveReminder()
+
+    const response = await change(reminder.id, { due_at: new Date(Date.now() - 60_000).toISOString() })
+
+    expect(response.status).toBe(400)
+    expect((await response.json()).issues).toEqual([{ field: "due_at", message: "Pick a time in the future" }])
+    expect(await db.reminder.findUniqueOrThrow({ where: { id: reminder.id } })).toEqual(reminder)
+  })
+
   test("answers 404 for a missing id, a malformed id, and another user's reminder", async () => {
     const theirs = await saveReminder(someoneElse)
 

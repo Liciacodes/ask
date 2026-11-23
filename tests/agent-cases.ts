@@ -1,6 +1,8 @@
-// Thirty sentences someone might type to Ask, each with the answer we expect.
+// Thirty-two sentences someone might type to Ask, each with the answer we expect.
 // `npm run test:api` sends each expected answer through the server, with a scripted model, and checks what the
 // person would see. `npm run test:live` asks the real model each sentence and checks it gives that answer.
+
+import type { Reason } from "@/lib/agent/not-understood"
 
 type Tool = "createReminder" | "changeReminder" | "cancelReminder" | "restoreReminder"
 
@@ -26,6 +28,8 @@ type Expected =
   | { does: "ask"; says: string }
   // No card at all. If a model tries anyway, the server turns it down with `reason`.
   | { does: "refuse"; says: string; tries?: { tool: Tool; input: Record<string, string>; on?: string; reason: string } }
+  // Not an action, a question or a list: the model calls didNotUnderstand, and the bar says what to try.
+  | { does: "notUnderstood"; reason: Reason }
 
 type AgentCase = { say: string; now: string; timezone: string; saved?: Saved[]; expect: Expected }
 
@@ -283,11 +287,25 @@ const agentCases: AgentCase[] = [
       tries: { tool: "cancelReminder", input: {}, on: "Gym", reason: "This reminder is already cancelled." },
     },
   },
+
+  // Messages Ask doesn't understand.
+  {
+    say: "asdfgh",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: { does: "notUnderstood", reason: "gibberish" },
+  },
   {
     say: "what's the weather tomorrow?",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "refuse", says: "I can only help with your reminders." },
+    expect: { does: "notUnderstood", reason: "off-topic" },
+  },
+  {
+    say: "do the thing",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: { does: "notUnderstood", reason: "too-vague" },
   },
 ]
 

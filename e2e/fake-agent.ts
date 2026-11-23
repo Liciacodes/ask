@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test"
 import { UI_MESSAGE_STREAM_HEADERS, type InferUIMessageChunk } from "ai"
 import type { AgentMessage } from "@/lib/agent/agent"
+import type { Reason } from "@/lib/agent/not-understood"
 import type { Preview } from "@/lib/agent/plans"
 import type { ReminderJson } from "@/lib/reminders"
 
@@ -31,6 +32,12 @@ const declined = (toolCallId = "call-1"): Chunk[] => [{ type: "tool-output-denie
 const refused = (reason: string, toolCallId = "call-1"): Chunk[] => [
   { type: "data-refused", id: toolCallId, data: { reason } },
   { type: "tool-output-denied", toolCallId },
+]
+
+// The model couldn't tell what was meant: the reply ends with didNotUnderstand, and the bar says what to try.
+const doesNotUnderstand = (reason: Reason, toolCallId = "call-1"): Chunk[] => [
+  { type: "tool-input-available", toolCallId, toolName: "didNotUnderstand", input: { reason } },
+  { type: "tool-output-available", toolCallId, output: { reason } },
 ]
 
 // The reply stops before a word of it: what the route sends when Groq, or the site's day, has no room for the call.
@@ -68,4 +75,4 @@ async function fakeAgent(page: Page, ...answers: Answer[]) {
   return requests
 }
 
-export { declined, did, fakeAgent, proposes, refused, says, stopsWith, turn, type Sent }
+export { declined, did, doesNotUnderstand, fakeAgent, proposes, refused, says, stopsWith, turn, type Sent }

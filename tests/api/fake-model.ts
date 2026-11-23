@@ -31,6 +31,21 @@ const says = (...pieces: string[]): Step => ({
   }),
 })
 
+// Thinks before it answers, the way gpt-oss sends its reasoning: apart from its words.
+const thinksThenSays = (reasoning: string, text: string): Step => ({
+  stream: simulateReadableStream({
+    chunks: [
+      { type: "reasoning-start" as const, id: "reasoning-1" },
+      { type: "reasoning-delta" as const, id: "reasoning-1", delta: reasoning },
+      { type: "reasoning-end" as const, id: "reasoning-1" },
+      { type: "text-start" as const, id: "text-1" },
+      { type: "text-delta" as const, id: "text-1", delta: text },
+      { type: "text-end" as const, id: "text-1" },
+      { type: "finish" as const, finishReason: { unified: "stop" as const, raw: undefined }, usage },
+    ],
+  }),
+})
+
 const fakeModel = (...steps: Step[]) => new MockLanguageModelV4({ doStream: steps })
 
-export { callsTool, fakeModel, says }
+export { callsTool, fakeModel, says, thinksThenSays }

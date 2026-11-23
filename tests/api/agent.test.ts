@@ -8,7 +8,7 @@ import { agentChat } from "@/lib/agent/client"
 import { db } from "@/lib/db"
 import { localDateTime } from "@/lib/time"
 import { agentCases, type AgentCase, type Expected, type Saved } from "../agent-cases"
-import { callsTool, fakeModel, says } from "./fake-model"
+import { callsTool, fakeModel, says, thinksThenSays } from "./fake-model"
 import { nextYear, OTHER_VISITOR, request, saveAll, saveReminder, setUpTestDatabase, TEST_VISITOR, visitorCookie } from "./helpers"
 
 // The route asks lib/agent/model for its model; here it gets the scripted one, so no test reaches Groq.
@@ -104,10 +104,12 @@ describe("creating", () => {
     expect(toolParts(finished)[0]).toMatchObject({ state: "output-available", output: { done: "create" } })
   })
 
-  test("declining saves nothing, and the model is told", async () => {
-    const model = fakeModel(proposal(), says("OK, I won't."))
+  test("declining saves nothing, and the model hears of it with your next question", async () => {
+    const model = fakeModel(proposal(), says("You have nothing else today."))
 
-    await approveThenRun(model, question, false)
+    const { finished } = await approveThenRun(model, question, false)
+    expect(model.doStreamCalls).toHaveLength(1)
+    await run(model, [question, finished, asking("What's on today?")])
 
     expect(await db.reminder.count()).toBe(0)
     expect(JSON.stringify(model.doStreamCalls[1].prompt)).toContain("denied")
@@ -169,14 +171,16 @@ describe("changing", () => {
     expect((await db.reminder.findUniqueOrThrow({ where: { id: dentist.id } })).status).toBe("pending")
   })
 
-  test("if the reminder is sent while its card waits, your yes is turned down, and the card and the model hear why", async () => {
+  test("if the reminder is sent while its card waits, your yes is turned down: the card says why, and the model hears it next", async () => {
     const dentist = await saveReminder({ title: "Dentist" })
-    const model = fakeModel(callsTool("cancelReminder", { id: dentist.id }), says("It was already sent."))
+    const model = fakeModel(callsTool("cancelReminder", { id: dentist.id }), says("It was sent at 09:00."))
     const question = asking("Cancel the dentist")
     const proposed = await run(model, [question])
     await db.reminder.update({ where: { id: dentist.id }, data: { status: "sent", sentAt: new Date() } })
 
     const finished = await run(model, [question, answer(proposed, true)])
+    expect(model.doStreamCalls).toHaveLength(1)
+    await run(model, [question, finished, asking("Why not?")])
 
     const reason = "This reminder was already sent, so it can't be cancelled."
     expect(toolParts(finished)[0]).toMatchObject({ state: "output-denied", approval: { approved: true } })
@@ -259,7 +263,7 @@ describe("what Groq is sent", () => {
     await run(model, [asking("Hi")])
 
     const tools = model.doStreamCalls[0].tools!
-    expect(tools.map((tool) => tool.name)).toEqual(["listReminders", "createReminder", "changeReminder", "cancelReminder", "restoreReminder"])
+    expect(tools.map((tool) => tool.name)).toEqual(["listReminders", "createReminder", "changeReminder", "cancelReminder", "restoreReminder", "didNotUnderstand"])
     expect(JSON.stringify(tools)).not.toMatch(/"(\$schema|pattern|format|minLength|maxLength|additionalProperties)"/)
     const create = tools.find((tool) => tool.name === "createReminder")!
     expect(create.type === "function" && create.inputSchema).toMatchObject({
@@ -306,6 +310,13 @@ describe("asking only when it must", () => {
     expect(told).toContain("a time with no day is the next time it comes round (today if it's still ahead, otherwise tomorrow)")
     expect(told).toContain('a weekday on its own or with "this" is the nearest one that hasn\'t passed')
     expect(told).toContain('a day of the month on its own, like "the 1st", is the next one that hasn\'t passed')
+  })
+
+  test("gibberish, off topic or too vague goes to didNotUnderstand, but a missing detail still gets a question", async () => {
+    const told = await instructions()
+
+    expect(told).toContain("because the message is gibberish, off topic or too vague, call didNotUnderstand instead of replying")
+    expect(told).toContain("A reminder with only a detail missing, like the time, still gets a question.")
   })
 
   test("only “next” with a weekday is unclear, and looking never asks", async () => {
@@ -355,8 +366,8 @@ describe("the test sentences", () => {
   const weekdayOf = (date: string) => new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`))
   const card = (saved: Saved) => ({ title: saved.title, description: null, date: saved.date, time: saved.time })
 
-  test("there are 30", () => {
-    expect(agentCases).toHaveLength(30)
+  test("there are 32", () => {
+    expect(agentCases).toHaveLength(32)
   })
 
   test.each(casesThat("create"))("“$say” previews and saves $expect.reminder.date at $expect.reminder.time", async (agentCase) => {
@@ -433,6 +444,20 @@ describe("the test sentences", () => {
     expect(previews(reply)).toEqual([])
     if (tries) expect(reply.parts).toContainEqual({ type: "data-refused", id: `call-${tries.tool}`, data: { reason: tries.reason } })
     expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: expected.says })
+    expect(await db.reminder.findMany()).toEqual(before)
+  })
+
+  test.each(casesThat("notUnderstood"))("“$say” ends in one model call with what to try ($expect.reason), and changes nothing", async (agentCase) => {
+    const { at, question } = await typed(agentCase)
+    const before = await db.reminder.findMany()
+    // The second step is never reached: the reply ends with the tool, which needs no approval.
+    const model = fakeModel(callsTool("didNotUnderstand", { reason: agentCase.expect.reason }), says("This is never said."))
+
+    const reply = await run(model, [question], at)
+
+    expect(model.doStreamCalls).toHaveLength(1)
+    expect(previews(reply)).toEqual([])
+    expect(reply.parts.at(-1)).toMatchObject({ type: "tool-didNotUnderstand", state: "output-available", output: { reason: agentCase.expect.reason } })
     expect(await db.reminder.findMany()).toEqual(before)
   })
 })
@@ -565,12 +590,10 @@ describe("the agent route", () => {
     expect((await db.reminder.findUniqueOrThrow({ where: { id: mine.id } })).status).toBe("pending")
   })
 
-  test("the bar's own conversation goes through: it asks, you approve, and the reminder is saved", async () => {
-    routeModel.current = fakeModel(
-      callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }),
-      says("Saved.")
-    )
+  // The bar's own conversation, as the visitor, through the real route: what it holds is what it would show.
+  function barChat() {
     const sent: Record<string, unknown>[] = []
+    const streams: string[] = []
     const chat = new Chat<AgentMessage>(
       agentChat({
         timezone: () => LAGOS,
@@ -579,20 +602,35 @@ describe("the agent route", () => {
           sent.push(JSON.parse(String(init?.body)))
           const headers = new Headers(init?.headers)
           headers.set("cookie", visitorCookie(TEST_VISITOR))
-          return POST(new Request(new URL(String(url), "http://localhost"), { ...init, headers }))
+          const response = await POST(new Request(new URL(String(url), "http://localhost"), { ...init, headers }))
+          streams.push(await response.clone().text())
+          return response
         },
       })
     )
+    // Saving takes a few trips to the test database, which can be slow.
+    const settled = async (requests: number) => {
+      await vi.waitFor(() => expect(sent).toHaveLength(requests), { timeout: 5_000 })
+      await vi.waitFor(() => expect(chat.status).toBe("ready"), { timeout: 5_000 })
+    }
+    return { chat, sent, streams, settled }
+  }
+
+  const approveCard = async (chat: Chat<AgentMessage>, approved = true) => {
+    const card = chat.messages.at(-1)!.parts.find((part) => part.type === "tool-createReminder") as { approval: { id: string } }
+    await chat.addToolApprovalResponse({ id: card.approval.id, approved })
+  }
+
+  test("the bar's own conversation goes through: it asks, you approve, and the reminder is saved", async () => {
+    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }), says("Saved."))
+    routeModel.current = model
+    const { chat, sent, settled } = barChat()
 
     await chat.sendMessage({ text: "Remind me to call mum on the 13th at 6pm" })
-    const card = chat.messages.at(-1)!.parts.find((part) => part.type === "tool-createReminder")
-    expect(card).toMatchObject({ state: "approval-requested" })
+    expect(chat.messages.at(-1)!.parts.find((part) => part.type === "tool-createReminder")).toMatchObject({ state: "approval-requested" })
     expect(await db.reminder.count()).toBe(0)
-
-    await chat.addToolApprovalResponse({ id: (card as { approval: { id: string } }).approval.id, approved: true })
-    // Saving takes a few trips to the test database, which can be slow.
-    await vi.waitFor(() => expect(sent).toHaveLength(2), { timeout: 5_000 })
-    await vi.waitFor(() => expect(chat.status).toBe("ready"), { timeout: 5_000 })
+    await approveCard(chat)
+    await settled(2)
 
     expect(sent.map((body) => Object.keys(body).sort())).toEqual([["messages", "timezone"], ["messages", "timezone"]])
     expect(sent[0].timezone).toBe(LAGOS)
@@ -602,6 +640,49 @@ describe("the agent route", () => {
       state: "output-available",
       output: { done: "create", reminder: { title: "Call mum", due_at: `${nextYear}-03-13T17:00:00.000Z` } },
     })
-    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: "Saved." })
+  })
+
+  // What gpt-oss once wrote as its answer after a card was approved.
+  const leaked = "We need to respond correctly. The instructions say don't say it's done until the tool's result comes back. Let's produce final."
+
+  test("reasoning the model sends apart from its words never reaches the bar", async () => {
+    routeModel.current = fakeModel(thinksThenSays(leaked, "You have nothing on Friday."))
+    const { chat, streams, settled } = barChat()
+
+    await chat.sendMessage({ text: "What's on Friday?" })
+    await settled(1)
+
+    const reply = chat.messages.at(-1)!
+    expect(reply.parts.map((part) => part.type)).not.toContain("reasoning")
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: "You have nothing on Friday." })
+    expect(JSON.stringify(chat.messages)).not.toContain("We need to respond")
+    expect(streams.join("")).not.toMatch(/"type":"reasoning|We need to respond/)
+  })
+
+  test("reasoning the model writes into its answer, up to gpt-oss's switch to the answer, is cut before the bar", async () => {
+    routeModel.current = fakeModel(says(leaked, "assistant", "finalYou have nothing on Friday."))
+    const { chat, streams, settled } = barChat()
+
+    await chat.sendMessage({ text: "What's on Friday?" })
+    await settled(1)
+
+    expect(chat.messages.at(-1)!.parts.at(-1)).toMatchObject({ type: "text", text: "You have nothing on Friday." })
+    expect(streams.join("")).not.toContain("We need to respond")
+  })
+
+  test.each([true, false])("after you answer a card (yes: %s), the model isn't called again, so nothing it writes reaches the bar", async (approved) => {
+    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }), says(`${leaked} Saved!`))
+    routeModel.current = model
+    const { chat, streams, settled } = barChat()
+
+    await chat.sendMessage({ text: "Remind me to call mum on the 13th at 6pm" })
+    await approveCard(chat, approved)
+    await settled(2)
+
+    expect(model.doStreamCalls).toHaveLength(1)
+    expect(await db.reminder.count()).toBe(approved ? 1 : 0)
+    expect(chat.messages.at(-1)!.parts.filter((part) => part.type === "text")).toEqual([])
+    expect(JSON.stringify(chat.messages)).not.toContain("We need to respond")
+    expect(streams.join("")).not.toContain("We need to respond")
   })
 })

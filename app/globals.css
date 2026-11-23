@@ -136,6 +136,35 @@
   }
 }
 
+/* Dragging a card to another day: the copy under the pointer is lifted, the card's own place stays faint where it
+   will land, and days that won't take it fade back. Touch screens keep scrolling: they get their own way to drag. */
+@media (pointer: fine) {
+  /* Even a card that can't move: dragging across one would select text, and the next press would drag the
+     selection instead of the card. */
+  [data-slot="week-board-card"] {
+    user-select: none;
+  }
+
+  [data-slot="week-board-card"]:not([data-locked]) {
+    cursor: grab;
+    touch-action: none;
+  }
+}
+
+[data-slot="week-board-card"][data-dragging] {
+  opacity: 0.35;
+}
+
+[data-drag-preview] {
+  cursor: grabbing;
+  scale: 1.03;
+  box-shadow: var(--card-shadow);
+}
+
+[data-slot="week-board-list"][data-refuses] {
+  opacity: 0.45;
+}
+
 body {
   background: var(--desk);
   color: var(--ink);

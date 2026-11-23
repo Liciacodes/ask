@@ -104,7 +104,7 @@ test("Esc crossfades back to one working list, starting from the card's size", a
 
   await settled(page)
   await expect(page.locator("[data-leaving]")).toHaveCount(0)
-  await expect(page.getByRole("listbox")).toHaveCount(1)
+  await expect(bar(page).getByRole("listbox")).toHaveCount(1)
   await expect(search(page)).toBeFocused()
 })
 
@@ -128,7 +128,7 @@ test("going back mid-swap starts from where the card is, and leaves one clean li
   await settled(page)
   await expect(bar(page)).toBeVisible()
   await expect(page.locator("[data-leaving]")).toHaveCount(0)
-  await expect(page.getByRole("listbox")).toHaveCount(1)
+  await expect(bar(page).getByRole("listbox")).toHaveCount(1)
   await expect(search(page)).toBeFocused()
 })
 

@@ -11,7 +11,15 @@ import { useWeek } from "@/components/week/use-week";
 import { Week, WeekNote } from "@/components/week/week";
 import type { ReminderJson } from "@/lib/reminders";
 
-type Outcome = { chosen: Command } | { saved: ReminderJson } | { agent: Done } | null;
+type Outcome =
+  | { chosen: Command }
+  | { saved: ReminderJson }
+  | { agent: Done }
+  | { moved: ReminderJson }
+  | { notMoved: { title: string; reason: string } }
+  | null;
+
+const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
 
 const marked = "-mx-1 rounded-[2px] px-1 highlighter";
 
@@ -34,7 +42,7 @@ export default function Home() {
   const here = useSyncExternalStore(neverChanges, readBrowser, nothingOnServer);
   const timezone = here?.timezone ?? null;
   const week = here ? weekDays(here.now, here.timezone) : null;
-  const { state, retry, put } = useWeek(timezone);
+  const { state, retry, put, move, saving } = useWeek(timezone);
   const [newest, setNewest] = useState<string | null>(null);
   const weekList = useRef<HTMLOListElement>(null);
   const arriving = useRef<{ id: string; from: DOMRect; before: ReturnType<typeof cardRects> } | null>(null);
@@ -117,6 +125,16 @@ export default function Home() {
                 </>
               )}
               {outcome && "agent" in outcome && <AgentOutcome {...outcome.agent} />}
+              {outcome && "moved" in outcome && (
+                <>
+                  Moved <span className={marked}>{outcome.moved.title}</span> to {whenOf(outcome.moved)}
+                </>
+              )}
+              {outcome && "notMoved" in outcome && (
+                <>
+                  Couldn&apos;t move <span className={marked}>{outcome.notMoved.title}</span>: {sentence(outcome.notMoved.reason)}
+                </>
+              )}
             </p>
             {week && (
               <WeekNote
@@ -126,7 +144,20 @@ export default function Home() {
               />
             )}
           </div>
-          {week && timezone && <Week ref={weekList} days={week.days} timezone={timezone} state={state} marked={newest} />}
+          {week && timezone && (
+            <Week
+              ref={weekList}
+              days={week.days}
+              timezone={timezone}
+              state={state}
+              marked={newest}
+              saving={saving}
+              onMove={async (reminder, day) => {
+                const result = await move(reminder, day);
+                setOutcome(result.ok ? { moved: result.reminder } : { notMoved: { title: reminder.title, reason: result.reason } });
+              }}
+            />
+          )}
         </section>
       </CommandBar>
     </main>

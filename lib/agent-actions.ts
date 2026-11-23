@@ -52,7 +52,7 @@ export const changeReminderInput = z
       ),
     title: z
       .string()
-       .trim()
+      .trim()
       .min(1, "Add a title")
       .max(200)
       .optional()
@@ -96,4 +96,8 @@ export const restoreReminderInput = z.strictObject({
     .describe(
       "The id of the cancelled reminder to bring back, from listReminders",
     ),
+});
+
+export const notUnderstoodInput = z.strictObject({
+  reason: z.enum(["gibberish", "off-topic", "too-vague"]).describe("Why the message can't become an action, a question or a list"),
 });

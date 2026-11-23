@@ -3,9 +3,12 @@
 import { createStickToBottom, isComposing } from "@ui-sdk/core"
 import { Button } from "@ui-sdk/react/button"
 import { Input } from "@ui-sdk/react/input"
-import { useEffect, useId, useRef, useState, type ReactNode } from "react"
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { localWhen } from "@/components/week/days"
+import { examples, openings, type Reason } from "@/lib/agent/not-understood"
 import type { Card, Preview } from "@/lib/agent/plans"
+import type { ReminderJson } from "@/lib/reminders"
+import { localDateTime } from "@/lib/time"
 import { AskIcon, CheckIcon } from "./icons"
 import { isAction, type ActionPart, type Agent } from "./use-agent"
 
@@ -173,6 +176,43 @@ function PreviewCard({ part, preview, refusal, active, onAnswer }: PreviewCardPr
 const textOf = (parts: Agent["messages"][number]["parts"]) =>
   parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("")
 
+// The reply to a card you said yes to: no model call, only what the server saved, said the way the cards say it.
+function DoneLine({ done, reminder }: { done: Preview["action"]; reminder: ReminderJson }) {
+  const { weekday, rest } = localWhen(localDateTime(new Date(reminder.due_at), reminder.timezone))
+  return (
+    <p className="wrap-break-word">
+      {wording[done].done}: {reminder.title}, {weekday} {rest}
+    </p>
+  )
+}
+
+// Ask's own words when it couldn't tell what you meant, and three things it does understand.
+function NotUnderstood({ reason }: { reason: Reason }) {
+  return (
+    <div>
+      <p>{openings[reason]} Try something like:</p>
+      <ul className="mt-1 flex flex-col gap-0.5 pl-3">
+        {examples.map((example) => (
+          <li key={example}>“{example}”</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// The latest message Ask didn't understand, so its words can go back in the field to fix.
+function lastNotUnderstood(messages: Agent["messages"]) {
+  let said = ""
+  let found: { id: string; said: string } | undefined
+  for (const message of messages) {
+    if (message.role === "user") said = textOf(message.parts)
+    for (const part of message.parts) {
+      if (part.type === "tool-didNotUnderstand" && part.state === "output-available") found = { id: part.toolCallId, said }
+    }
+  }
+  return found
+}
+
 function Conversation({ agent }: { agent: Agent }) {
   const [draft, setDraft] = useState("")
   const field = useRef<HTMLInputElement>(null)
@@ -180,6 +220,21 @@ function Conversation({ agent }: { agent: Agent }) {
   const keysHint = useId()
 
   useEffect(() => createStickToBottom().connect(log.current!), [])
+
+  // A message Ask didn't understand comes back into the field once, to fix rather than retype.
+  const missed = lastNotUnderstood(agent.messages)
+  const [restored, setRestored] = useState<string | null>(null)
+  if (missed && missed.id !== restored) {
+    setRestored(missed.id)
+    setDraft(missed.said)
+  }
+  // ...with the caret at its end, ready to edit.
+  useLayoutEffect(() => {
+    const input = field.current
+    if (!restored || !input) return
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+  }, [restored])
 
   const last = agent.messages.at(-1)
   const lastPart = last?.role === "assistant" ? last.parts.at(-1) : undefined
@@ -244,17 +299,22 @@ function Conversation({ agent }: { agent: Agent }) {
                   </p>
                 ) : null
               }
+              if (part.type === "tool-didNotUnderstand") {
+                return part.state === "output-available" ? <NotUnderstood key={key} reason={part.output.reason} /> : null
+              }
               const preview = isAction(part) ? agent.previews.get(part.toolCallId) : undefined
               if (!isAction(part) || !preview) return null
               return (
-                <PreviewCard
-                  key={part.toolCallId}
-                  part={part}
-                  preview={preview}
-                  refusal={agent.refusals.get(part.toolCallId)}
-                  active={agent.waiting?.toolCallId === part.toolCallId}
-                  onAnswer={answer}
-                />
+                <Fragment key={part.toolCallId}>
+                  <PreviewCard
+                    part={part}
+                    preview={preview}
+                    refusal={agent.refusals.get(part.toolCallId)}
+                    active={agent.waiting?.toolCallId === part.toolCallId}
+                    onAnswer={answer}
+                  />
+                  {part.state === "output-available" && <DoneLine done={part.output.done} reminder={part.output.reminder} />}
+                </Fragment>
               )
             })
           )

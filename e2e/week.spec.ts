@@ -21,7 +21,7 @@ const day = (page: Page, name: string) =>
   page.getByRole("list", { name: "Days this week" }).getByRole("listitem").filter({ has: page.getByRole("heading", { name }) })
 
 async function expectCards(day: Locator, cards: [time: string, title: string][]) {
-  const items = day.getByRole("listitem")
+  const items = day.getByRole("option")
   await expect(items).toHaveCount(cards.length)
   for (const [i, [time, title]] of cards.entries()) {
     await expect(items.nth(i).locator("time")).toHaveText(time)
