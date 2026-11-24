@@ -40,6 +40,15 @@ const doesNotUnderstand = (reason: Reason, toolCallId = "call-1"): Chunk[] => [
   { type: "tool-output-available", toolCallId, output: { reason } },
 ]
 
+// The model didn't understand a message with a date or time: the server turns that down, and the model's second
+// answer follows in a step of its own.
+const askedAgain = (reason: Reason, toolCallId = "call-0"): Chunk[] => [
+  { type: "tool-input-available", toolCallId, toolName: "didNotUnderstand", input: { reason } },
+  { type: "tool-output-error", toolCallId, errorText: "Error: The person's message has a date or time, so it's a reminder to set." },
+  { type: "finish-step" },
+  { type: "start-step" },
+]
+
 // The reply stops before a word of it: what the route sends when Groq, or the site's day, has no room for the call.
 const stopsWith = (errorText: string): Chunk[] => [
   { type: "start", messageId: "reply-1" },
@@ -75,4 +84,4 @@ async function fakeAgent(page: Page, ...answers: Answer[]) {
   return requests
 }
 
-export { declined, did, doesNotUnderstand, fakeAgent, proposes, refused, says, stopsWith, turn, type Sent }
+export { askedAgain, declined, did, doesNotUnderstand, fakeAgent, proposes, refused, says, stopsWith, turn, type Sent }

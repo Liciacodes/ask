@@ -67,4 +67,4 @@ function asksInstead(question: string): LanguageModelMiddleware {
   }
 }
 
-export { asksInstead, whichWeek }
+export { asksInstead, NAMES_A_DATE, whichWeek }

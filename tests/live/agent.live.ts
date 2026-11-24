@@ -1,7 +1,7 @@
 // Real Groq calls, on the sentences in tests/agent-cases.ts: run `npm run test:live` only when the person paying says yes.
 // Its own config keeps it out of `npm run test:api` and CI.
 //
-// All 42 take about 62 calls and, at the last live run's 1,400 tokens in and up to 300 out a call, about 100,000
+// All 42 take about 63 calls and, at the last live run's 1,400 tokens in and up to 300 out a call, about 100,000
 // tokens: half of Groq's free day, which the live site shares. Run them when the site is quiet, or a few at a
 // time: `npm run test:live -- -t "dentist"`, with ASK_LIVE_CALLS set to the calls agreed for the run.
 import { APICallError, readUIMessageStream, wrapLanguageModel, type LanguageModelMiddleware } from "ai"
@@ -131,9 +131,11 @@ test.each(agentCases)("the real model answers “$say” with: $expect.does", as
   const schemaRefused = parts.flatMap((part) =>
     part.type === "dynamic-tool" && part.state === "output-error" ? [{ [part.toolName]: part.input, error: part.errorText }] : []
   )
-  const notUnderstood = parts.flatMap((part) => (part.type === "tool-didNotUnderstand" && "input" in part && part.input ? [part.input.reason] : []))
+  // The "didn't understand" that stood, and any the server turned down because the message had a date or time.
+  const notUnderstood = parts.flatMap((part) => (part.type === "tool-didNotUnderstand" && part.state === "output-available" ? [part.input.reason] : []))
+  const askedAgain = parts.flatMap((part) => (part.type === "tool-didNotUnderstand" && part.state === "output-error" ? [part.input?.reason] : []))
   const text = parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ")
-  const did = JSON.stringify({ cards, lists, tried, schemaRefused, notUnderstood, text })
+  const did = JSON.stringify({ cards, lists, tried, schemaRefused, askedAgain, notUnderstood, text })
   console.log(`“${agentCase.say}” → ${did}\n  ${costOf(cost)}`)
 
   const expected = agentCase.expect
@@ -178,6 +180,12 @@ test.each(agentCases)("the real model answers “$say” with: $expect.does", as
       break
     case "notUnderstood":
       expect(cards, did).toEqual([])
+      // Where it's fair, a question offering a reminder will do instead, as long as nothing is proposed.
+      if (expected.orOffersReminder && notUnderstood.length === 0) {
+        expect(tried, did).toEqual([])
+        expect(text, did).toMatch(/remind[\s\S]*\?/i)
+        break
+      }
       // Gibberish and too vague are close, so either is right for both; off topic must be off topic.
       expect(notUnderstood, did).toEqual([expected.reason === "off-topic" ? "off-topic" : expect.stringMatching(/^(gibberish|too-vague)$/)])
       break

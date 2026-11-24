@@ -19,10 +19,11 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 | 4 | The header | Done |
 | 5 | The time grid, and the phone day list | Done |
 | 6 | The Ask bar in the new look | Done |
-| 6b | Ask again when a message with a date or time "isn't understood" | Next |
+| 6b | Ask again when a message with a date or time "isn't understood" | Done |
 | 7 | The dashed "not saved" card | Next |
 | 9 | Tidy up, and the deploy notes | Before launch |
 | 8 | Drag motion and the phone grip | After launch |
+| 10 | The Chrome extension that breaks drag and Ask | After launch |
 
 ## Ground rules
 
@@ -47,6 +48,8 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 - **Dragging changes the date only.** The time stays.
 - **No server override for "other".** The category description in `lib/agent-actions.ts` gives the model examples instead.
 - **The bar's buttons keep their wording.** "Don't save" stays, so it can't be confused with cancelling a reminder.
+- **"Order a cake" may be food or shopping**, like "Pay rent", which may be other or shopping.
+- **An off-topic message with a date or time may get a question offering a reminder** after the retry, like "What time tomorrow would you like to be reminded to check the weather?" It's friendly, and Ask is a reminder app. The retry's wording stays as it is.
 
 ---
 
@@ -94,44 +97,59 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 - **Preview card.** It takes the category's colour and icon tile, with the action label, a 20px title, the date and time, and pill buttons. On a work card, the buttons swap to a white Save and an outlined "Don't save".
 - **New reminder form.** A Category picker follows the title's keyword guess until you pick one yourself, and the category is saved with the reminder.
 
+### Step 6b: ask again when a message with a date or time "isn't understood"
+
+**Why.** With the instruction line "A task with a date or time is a reminder to set, even when you can't do the task yourself", tasks Ask can't do itself still sometimes came back as `didNotUnderstand`: "book flights on 3 December at 10am" in 1 of 3 live runs, and "Book a table for dinner Friday at 7pm" in its one run.
+
+**What.** When the latest message has a date or time and the model calls `didNotUnderstand`, the server turns that down once and asks the model again. The second answer stands: a card, a question, or "didn't understand", which the bar shows with its examples as before.
+
+**How it's built.**
+- **`mentionsWhen(text)`** (`lib/agent/mentions-when.ts`) looks for:
+  - clock times: 7pm, 10 am, 9.30pm, 18:00, "at 9", noon, midday, midnight, 7 o'clock;
+  - day words: today, tonight, tomorrow, and the weekdays in full ("sun" and "sat" are words of their own);
+  - dates, with the patterns "next Friday" already uses (`NAMES_A_DATE` in `which-week.ts`): "the 1st", "3 December", "Dec 3", 27/11, 2026-11-27;
+  - spans: "in 2 hours", "in an hour", "in half an hour", "in a few days".
+- **The retry** (`lib/agent/agent.ts`).
+  - The first `didNotUnderstand` in a reply throws `AskAgain` instead of returning, so the model gets a tool error: the message has a date or time, so it's a reminder to set; propose it, or ask what's missing; only if it has nothing to do with a reminder, call didNotUnderstand again.
+  - The reply stops only on a `didNotUnderstand` that succeeds (`notUnderstood`), no longer on any call of it.
+  - At most one retry a reply. Only the latest message counts, not a date earlier in the conversation.
+  - The bar keeps the error's exact words, so on the next question the model reads what it read the first time. It isn't logged as a failure, and the bar shows nothing for it.
+- **Limits.** The retry is part of the same question, so it doesn't take another of the visitor's questions. It is a real Groq call, so it takes one of the site's calls for the day through `countedModel`.
+- **Cost.** One extra call, only when the model says "didn't understand" to a message with a date or time. Off-topic messages that mention a day pay it too: the test sentence "what's the weather tomorrow?" now takes 2 calls, so all 42 sentences take about 63.
+
+**Tests, with a fake model.**
+- `tests/mentions-when.test.ts`: each kind of date and time, and 9 messages without one ("asdfgh", "do the thing", "what's the weather", "the sun is out", "I may go", …).
+- `tests/api/agent.test.ts`, "“didn't understand” a message with a date or time":
+  - asked again once: a card the second time gets its card, and a question is asked;
+  - a second "didn't understand" stands, and there's no third call;
+  - no date or time ends in one call, as before;
+  - a date earlier in the conversation doesn't bring a retry;
+  - the model hears why, and the bar gets the same words, with nothing in the error log;
+  - on the next question the model reads the error as it did the first time.
+- The test sentence "what's the weather tomorrow?" is marked `askedAgain`, and expects 2 calls.
+- `tests/api/limits.test.ts`: the retry uses a site call but not one of the visitor's questions.
+- `e2e/agent.spec.ts`: a reply that was asked again shows only its card, with no examples and no words back in the field, and Enter still saves.
+- The live test logs `askedAgain`, and checks only the "didn't understand" that stood.
+
+**Breaks, each caught.**
+| Break | Caught by |
+| --- | --- |
+| No retry | 7 tests |
+| Retrying without a date or time | 6 tests |
+| Retrying more than once | 2 tests |
+| The retry taking one of the visitor's questions | the limits test (2 questions, not 1) |
+| The bar getting different words from the model's | 2 tests |
+
+**Live check, 24 November: 11 of the 16 calls you agreed.** Three runs, capped at 6, 6 and 4 calls.
+- "book flights on 3 December at 10am": the right card in 3 of 3. The first run was off-topic, was asked again, and got its card on the second call.
+- "Book a table for dinner Friday at 7pm": the right card in 3 of 3, each on the first call.
+- "what's the weather tomorrow?": off-topic, then asked again, in 2 of 2. The second answer was a question both times: "What time tomorrow would you like to be reminded to check the weather?" No card, and no "didn't understand" examples.
+
+**Your decision on the weather question.** The retry's wording stays. A question offering a reminder is fine: it's friendly, and Ask is a reminder app. The test sentence is marked `orOffersReminder`. Its live test accepts either "didn't understand" or a question that mentions a reminder, as long as no card is proposed. The API test still sends the "didn't understand" answer twice. This wasn't checked live again.
+
 ---
 
 ## Next
-
-### Step 6b: ask again when a message with a date or time "isn't understood"
-
-**Why.** With the instruction line "A task with a date or time is a reminder to set, even when you can't do the task yourself", tasks Ask can't do itself still sometimes come back as `didNotUnderstand`. In the last live runs:
-- "book flights on 3 December at 10am" was off-topic in 1 of 3 runs;
-- "Book a table for dinner Friday at 7pm" was off-topic in its one run.
-
-**What.** When the latest message has a date or time and the model calls `didNotUnderstand`, the server turns that down once and asks the model again. A second "didn't understand" is accepted, and the bar shows its examples as it does today.
-
-**How.**
-- **Spotting a date or time.** A pure function, `mentionsWhen(text)`, unit-tested. It looks for:
-  - clock times (7pm, 10am, 18:00, noon, midnight);
-  - day words (today, tonight, tomorrow, the weekdays);
-  - dates ("3 December", "the 1st");
-  - spans ("in 2 hours").
-- **The retry.**
-  - The first `didNotUnderstand` call in a reply ends in a tool error instead of a result. The error tells the model the message has a date or time, so it's a reminder to set: propose it, or ask what's missing.
-  - The reply no longer stops on any `didNotUnderstand` call, only on one that succeeds.
-  - Never more than one retry per reply.
-- **Limits.**
-  - The retry is part of the same question, so it doesn't take another of the visitor's daily questions (`takeQuestion` runs once per new question).
-  - It is a real Groq call, so it does take one of the site's calls for the day through `countedModel`, like every model call.
-- **Cost.** One extra call, only when the model would otherwise refuse a message with a date or time.
-
-**Tests, with a fake model:**
-- "Didn't understand" with a date or time is retried once, and the second answer stands, card or "didn't understand".
-- Without a date or time, it ends in one call, as today.
-- A reply is never retried more than once.
-- The retry doesn't use one of the visitor's daily questions, but does use a site call.
-- The model hears why it was asked again.
-- `mentionsWhen` has unit tests for each kind of date and time, and for messages without one ("asdfgh", "do the thing", "what's the weather").
-
-**Breaks.** No retry; retrying without a date or time; retrying more than once; the retry using a question.
-
-**Live check, with your OK for 12 calls (`ASK_LIVE_CALLS=12`).** Run "book flights on 3 December at 10am" and "Book a table for dinner Friday at 7pm" 3 times each. That's at most 2 calls a run.
 
 ### Step 7: the dashed "not saved" card
 - **When it shows.** While a create or change card waits for your OK, the week shows a white card with a dashed border in the category's colour, at its date and time, reading "6:00 PM · not saved".
@@ -177,6 +195,25 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 - **Phones.** In the day list, a grip of at least 44×44px starts the drag, and touching anywhere else scrolls.
 - **Other cards in the day.** They slide to their new lanes instead of jumping.
 
+### Step 10: the Chrome extension that breaks drag and Ask
+**What you found on 24 November.** On localhost in your usual Chrome, desktop width:
+- dragging a card with the mouse didn't move it;
+- asking the bar to create a reminder stayed on "Thinking…" and never showed a card.
+
+Both work in an Incognito window, where extensions are off, so one of your extensions is the cause, not Ask.
+
+**What's known.**
+- In a clean Chromium on the same dev server, with faked routes and no Groq calls, a mouse drag moves the card and saves it. That held for a quick drag, a slow one, after opening and closing the bar, and after a save from the form. The browser tests pass too.
+- The dev log (`.next/dev/logs/next-development.log`) shows extensions editing the page on load: `bis_skin_checked` and `bis_register` attributes, `data-cap-chrome-extension-installed` on `<html>`, and a `__processed_…__` attribute on `<body>`.
+
+**To do.**
+- **Find the extension.** Turn extensions on one at a time in a fresh profile, or in Incognito with "Allow in Incognito", until drag or the bar breaks.
+- **See how it breaks them.** Some guesses to check first:
+  - an extension that calls `preventDefault()` on `pointerdown`: UI SDK's drag ignores a press that's already been prevented;
+  - one that starts its own drag or text selection, which cancels the pointer (`pointercancel`);
+  - one that wraps `fetch`, so the reply's stream never reaches the bar as it arrives.
+- **Decide whether Ask can guard against it.** For example, a timeout that turns a reply with no news into the "Ask couldn't get an answer" message instead of "Thinking…" forever. Or a note in the bar when a drag is cancelled by something outside Ask. Other visitors will have the same extension.
+
 ---
 
 ## Flaky tests to watch
@@ -201,10 +238,10 @@ All runs use the test database. Calls were capped once `ASK_LIVE_CALLS` existed.
 | The same 12, after your examples in the description | 12 | All 11 cards right; "book flights" went off-topic |
 | "book flights" ×3, and 5 sentences with words outside the description | 8 | Flights off-topic in 2 of 3; 4 of 5 right ("Reply to Ada's email" came back as work) |
 | "book flights" ×3, and 5 task and message sentences, after the instruction line | 8 | Flights off-topic in 1 of 3; 4 of 5 right ("Book a table…" went off-topic) |
+| Step 6b: "book flights" ×3, "Book a table…" ×3, "what's the weather tomorrow?" ×2, cap 16 | 11 | All 6 cards right. Flights was off-topic once, asked again, then its card. The weather was asked again both times and became a question, "What time tomorrow would you like to be reminded to check the weather?", not a card |
 
-Tokens per call are now about 1,435 in and up to about 300 out. All 42 test sentences take about 62 calls, about half of Groq's free day, which the live site shares.
+Tokens per call are now about 1,435 in and up to about 300 out. All 42 test sentences take about 63 calls since step 6b ("what's the weather tomorrow?" is asked again), about half of Groq's free day, which the live site shares.
 
 ## Open questions
 
-- **"Order a cake"** is graded as food only. Shopping is arguably fair too. Your call.
 - **The bottom sheet on a real phone.** See step 9.

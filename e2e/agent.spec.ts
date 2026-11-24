@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 import { examples } from "@/lib/agent/not-understood"
 import { problems, usedUp } from "@/lib/agent/problems"
-import { declined, did, doesNotUnderstand, fakeAgent, proposes, refused, says, stopsWith, turn } from "./fake-agent"
+import { askedAgain, declined, did, doesNotUnderstand, fakeAgent, proposes, refused, says, stopsWith, turn } from "./fake-agent"
 import { addTextField, bar, commands, expectHighlighted, goHome, openBar, openShortcut, reminder, search, status } from "./helpers"
 
 test.use({ timezoneId: "Africa/Lagos", locale: "en-GB" })
@@ -327,6 +327,26 @@ test("a test that forgets to fake /api/agent never reaches a server", async ({ p
   const sent = await page.evaluate(() => fetch("/api/agent", { method: "POST", body: "{}" }).then(() => "reached a server", () => "blocked"))
 
   expect(sent).toBe("blocked")
+})
+
+test("a reply the server asked again shows only its card: no examples, no words back in the field, and Enter still saves", async ({ page }) => {
+  const requests = await fakeAgent(
+    page,
+    turn(askedAgain("off-topic"), proposes("createReminder", callMumInput, callMum)),
+    turn(did("create", savedCallMum))
+  )
+  await goHome(page)
+  await ask(page, "call mum friday at 6pm")
+
+  await expect(card(page, "New reminder")).toBeVisible()
+  await expect(conversation(page).getByText("Try something like")).toHaveCount(0)
+  await expect(conversation(page).getByText(/date or time/)).toHaveCount(0)
+  await expect(followUp(page)).toHaveValue("")
+
+  await page.keyboard.press("Enter")
+
+  await expect(conversation(page).getByText("Saved: Call mum, Friday 20 Nov, 18:00")).toBeVisible()
+  expect(requests).toHaveLength(2)
 })
 
 test("a message Ask doesn't understand says so, offers sentences to try, and gives your words back to fix", async ({ page }) => {

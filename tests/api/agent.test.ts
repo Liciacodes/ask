@@ -387,6 +387,87 @@ describe("asking only when it must", () => {
   })
 })
 
+// A message with a date or time is a reminder to set. The model's first "didn't understand" for one is turned down,
+// once, and it's asked again.
+describe("“didn't understand” a message with a date or time", () => {
+  const table = { title: "Book a table for dinner", date: `${nextYear}-03-13`, time: "19:00", category: "food" }
+  const tableQuestion = asking(`Book a table for dinner on 13 March ${nextYear} at 7pm`)
+  const notUnderstood = (id: string, reason = "off-topic") => callsTool("didNotUnderstand", { reason }, id)
+  const notUnderstoodParts = (reply: AgentMessage) => toolParts(reply).filter((part) => part.type === "tool-didNotUnderstand")
+
+  test("is asked again once, and a card the second time gets its card", async () => {
+    const model = fakeModel(notUnderstood("first"), callsTool("createReminder", table))
+
+    const reply = await run(model, [tableQuestion])
+
+    expect(model.doStreamCalls).toHaveLength(2)
+    expect(previews(reply)).toEqual([{ action: "create", reminder: { description: null, ...table } }])
+    expect(notUnderstoodParts(reply).map((part) => part.state)).toEqual(["output-error"])
+    expect(toolParts(reply).at(-1)).toMatchObject({ type: "tool-createReminder", state: "approval-requested" })
+  })
+
+  test("a question the second time is asked", async () => {
+    const model = fakeModel(notUnderstood("first"), says("Which restaurant?"))
+
+    const reply = await run(model, [tableQuestion])
+
+    expect(model.doStreamCalls).toHaveLength(2)
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: "Which restaurant?" })
+  })
+
+  test("a second “didn't understand” stands: the reply ends there, never asking a third time", async () => {
+    const model = fakeModel(notUnderstood("first"), notUnderstood("second"), says("This is never said."))
+
+    const reply = await run(model, [asking("what's the weather tomorrow?")])
+
+    expect(model.doStreamCalls).toHaveLength(2)
+    expect(notUnderstoodParts(reply).map((part) => part.state)).toEqual(["output-error", "output-available"])
+    expect(reply.parts.at(-1)).toMatchObject({ type: "tool-didNotUnderstand", state: "output-available", output: { reason: "off-topic" } })
+  })
+
+  test.each(["asdfgh", "do the thing", "what's the weather?"])("“%s” has no date or time, so it ends in one call, as before", async (said) => {
+    const model = fakeModel(notUnderstood("first", "too-vague"), says("This is never said."))
+
+    const reply = await run(model, [asking(said)])
+
+    expect(model.doStreamCalls).toHaveLength(1)
+    expect(notUnderstoodParts(reply).map((part) => part.state)).toEqual(["output-available"])
+  })
+
+  test("only the latest message counts: a date earlier in the conversation doesn't bring a second try", async () => {
+    const earlier: AgentMessage = { id: "earlier", role: "assistant", parts: [{ type: "text", text: "Which restaurant?" }] }
+    const model = fakeModel(notUnderstood("first", "gibberish"), says("This is never said."))
+
+    await run(model, [tableQuestion, earlier, asking("asdfgh")])
+
+    expect(model.doStreamCalls).toHaveLength(1)
+  })
+
+  test("the model hears why it was asked again, in words, and so does the bar, without a failure in the log", async () => {
+    const failures = vi.spyOn(console, "error")
+    const model = fakeModel(notUnderstood("first"), callsTool("createReminder", table))
+
+    const reply = await run(model, [tableQuestion])
+
+    const why = "The person's message has a date or time, so it's a reminder to set"
+    expect(JSON.stringify(model.doStreamCalls[1].prompt)).toContain(why)
+    expect(notUnderstoodParts(reply)[0]).toMatchObject({ state: "output-error", errorText: expect.stringContaining(why) })
+    expect(failures).not.toHaveBeenCalled()
+    failures.mockRestore()
+  })
+
+  test("what was said on the way reaches the model on the next question as it did the first time", async () => {
+    const model = fakeModel(notUnderstood("first"), says("Which restaurant?"), says("OK."))
+
+    const reply = await run(model, [tableQuestion])
+    await run(model, [tableQuestion, reply, asking("Ada's place")])
+
+    const toldFirst = JSON.stringify(model.doStreamCalls[1].prompt.find((message) => message.role === "tool"))
+    const toldLater = JSON.stringify(model.doStreamCalls[2].prompt.find((message) => message.role === "tool"))
+    expect(toldLater).toBe(toldFirst)
+  })
+})
+
 // Each expected answer in tests/agent-cases.ts, sent through the server with a scripted model: the card the person
 // would see, and what's saved once they say yes. `npm run test:live` checks the real model gives these answers.
 describe("the test sentences", () => {
@@ -494,15 +575,19 @@ describe("the test sentences", () => {
     expect(await db.reminder.findMany()).toEqual(before)
   })
 
-  test.each(casesThat("notUnderstood"))("“$say” ends in one model call with what to try ($expect.reason), and changes nothing", async (agentCase) => {
+  test.each(casesThat("notUnderstood"))("“$say” ends with what to try ($expect.reason), and changes nothing", async (agentCase) => {
     const { at, question } = await typed(agentCase)
     const before = await db.reminder.findMany()
-    // The second step is never reached: the reply ends with the tool, which needs no approval.
-    const model = fakeModel(callsTool("didNotUnderstand", { reason: agentCase.expect.reason }), says("This is never said."))
+    const calls = agentCase.expect.askedAgain ? 2 : 1
+    // The step after the last "didn't understand" is never reached: the reply ends with the tool, which needs no approval.
+    const model = fakeModel(
+      ...Array.from({ length: calls }, (_, call) => callsTool("didNotUnderstand", { reason: agentCase.expect.reason }, `call-${call}`)),
+      says("This is never said.")
+    )
 
     const reply = await run(model, [question], at)
 
-    expect(model.doStreamCalls).toHaveLength(1)
+    expect(model.doStreamCalls).toHaveLength(calls)
     expect(previews(reply)).toEqual([])
     expect(reply.parts.at(-1)).toMatchObject({ type: "tool-didNotUnderstand", state: "output-available", output: { reason: agentCase.expect.reason } })
     expect(await db.reminder.findMany()).toEqual(before)
