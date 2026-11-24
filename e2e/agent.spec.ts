@@ -111,7 +111,7 @@ test("Enter on the card says yes: the reminder is saved, the bar says so in its 
   const friday = day(page, "Friday 20 November").getByRole("option")
   await expect(friday).toHaveCount(1)
   await expect(friday).toContainText("Call mum")
-  await expect(friday.locator("[data-marker]")).toHaveCount(1)
+  await expect(friday).toHaveAttribute("data-newest", "")
   await expect(status(page)).toHaveText("Saved Call mum for Fri 20 Nov, 18:00")
   await expect(bar(page)).toBeVisible()
   await expect(hints(page)).toHaveText(["↵send", "escback"])

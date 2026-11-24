@@ -2,7 +2,7 @@ import type { SVGProps } from "react"
 import type { Category } from "@/lib/categories"
 
 // Each kind of reminder's colours, as whole class names so Tailwind finds them: its card and words, the tile behind
-// its icon, and the highlighter on a new card's title, in a shade its words still read on.
+// its icon, and the highlighter on the bar's card title, in a shade its words still read on.
 const categoryLook: Record<Category, { card: string; tile: string }> = {
   work: { card: "bg-work text-work-ink shadow-work [--marker:var(--work-marker)]", tile: "bg-work-tile" },
   health: { card: "bg-health text-health-ink [--marker:var(--health-tile)]", tile: "bg-health-tile" },
@@ -14,6 +14,21 @@ const categoryLook: Record<Category, { card: string; tile: string }> = {
   shopping: { card: "bg-shopping text-shopping-ink [--marker:var(--shopping-tile)]", tile: "bg-shopping-tile" },
   hobby: { card: "bg-hobby text-hobby-ink [--marker:var(--hobby-tile)]", tile: "bg-hobby-tile" },
   other: { card: "bg-other text-other-ink [--marker:var(--other-tile)]", tile: "bg-other-tile" },
+}
+
+// A card that isn't saved yet: white, with a dashed border and words in its category's ink. A work card's ink is
+// white, so on white it takes the accent, and its tile is the accent itself.
+const dashedLook: Record<Category, { card: string; tile: string }> = {
+  work: { card: "border-accent text-accent", tile: "bg-work text-work-ink" },
+  health: { card: "border-health-ink text-health-ink", tile: "bg-health-tile" },
+  call: { card: "border-call-ink text-call-ink", tile: "bg-call-tile" },
+  message: { card: "border-message-ink text-message-ink", tile: "bg-message-tile" },
+  food: { card: "border-food-ink text-food-ink", tile: "bg-food-tile" },
+  travel: { card: "border-travel-ink text-travel-ink", tile: "bg-travel-tile" },
+  exercise: { card: "border-exercise-ink text-exercise-ink", tile: "bg-exercise-tile" },
+  shopping: { card: "border-shopping-ink text-shopping-ink", tile: "bg-shopping-tile" },
+  hobby: { card: "border-hobby-ink text-hobby-ink", tile: "bg-hobby-tile" },
+  other: { card: "border-other-ink text-other-ink", tile: "bg-other-tile" },
 }
 
 // A small tile on its own, like an option in the New reminder form's picker.
@@ -76,4 +91,4 @@ function CategoryIcon({ category, ...props }: SVGProps<SVGSVGElement> & { catego
   )
 }
 
-export { CategoryIcon, categoryChip, categoryLook, categoryName }
+export { CategoryIcon, categoryChip, categoryLook, categoryName, dashedLook }

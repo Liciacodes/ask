@@ -10,6 +10,10 @@ import type { ReminderJson } from "@/lib/reminders"
 
 type Done = { done: Preview["action"]; reminder: ReminderJson }
 
+// The action on a card that hasn't been carried out yet: waiting for your OK, or saving after your yes. `replaces`
+// is the reminder a change, cancel or restore is about.
+type Proposal = { id: string; preview: Preview; replaces?: string }
+
 type Part = AgentMessage["parts"][number]
 type ActionPart = Extract<Part, { type: "tool-createReminder" | "tool-changeReminder" | "tool-cancelReminder" | "tool-restoreReminder" }>
 
@@ -41,8 +45,11 @@ function useAgent(onDone: (done: Done) => void) {
   const refusals = new Map(parts.flatMap((part) => (part.type === "data-refused" ? [[part.id ?? "", part.data.reason] as const] : [])))
   const cards = parts.filter(isAction).filter((part) => previews.has(part.toolCallId))
   const waiting = cards.find((part) => part.state === "approval-requested")
-  const saving = cards.some((part) => part.state === "approval-responded" && part.approval.approved)
+  const approved = cards.find((part) => part.state === "approval-responded" && part.approval.approved)
+  const saving = approved !== undefined
   const busy = chat.status === "submitted" || chat.status === "streaming"
+  const pending = waiting ?? approved
+  const input = pending?.input as { id?: string } | undefined
 
   // Each finished action reaches the week once, as soon as the server confirms it, even with the bar closed.
   useEffect(() => {
@@ -60,6 +67,7 @@ function useAgent(onDone: (done: Done) => void) {
     previews,
     refusals,
     waiting: waiting && { toolCallId: waiting.toolCallId, preview: previews.get(waiting.toolCallId)! },
+    proposal: pending && ({ id: pending.toolCallId, preview: previews.get(pending.toolCallId)!, replaces: input?.id } satisfies Proposal),
     saving,
     busy,
     problem: problemOf(chat.error),
@@ -77,4 +85,4 @@ function useAgent(onDone: (done: Done) => void) {
 
 type Agent = ReturnType<typeof useAgent>
 
-export { isAction, useAgent, type ActionPart, type Agent, type Done }
+export { isAction, useAgent, type ActionPart, type Agent, type Done, type Proposal }

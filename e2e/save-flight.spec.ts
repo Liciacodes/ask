@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test"
 import { fakeSave, goHome, openBar, openForm, reminder, status } from "./helpers"
 
 const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)"
-const ALLOWED = ["transform", "opacity", "clipPath"]
+const ALLOWED = ["transform", "opacity"]
 
 test.use({ timezoneId: "Africa/Lagos", locale: "en-GB" })
 
@@ -24,9 +24,7 @@ const recordMotion = () => {
   const describe = (el: HTMLElement) =>
     el.dataset.flying !== undefined
       ? "flying card"
-      : el.dataset.marker !== undefined
-        ? "highlighter"
-        : el.dataset.id
+      : el.dataset.id
           ? `card ${el.getAttribute("aria-label")?.split(",")[0]}`
           : el.dataset.barLayer !== undefined
             ? "bar"
@@ -118,7 +116,7 @@ test.afterEach(async ({ page }) => {
   expect(pageErrors.get(page), "errors thrown in the page").toEqual([])
 })
 
-test("saving flies the card to its time in the grid: transform, opacity and clip-path only, one curve, done within 800ms", async ({ page }) => {
+test("saving flies the card to its time in the grid: transform and opacity only, one curve, done within 800ms", async ({ page }) => {
   await goHome(page, week())
   await saveDentist(page)
   await settled(page)
@@ -133,7 +131,7 @@ test("saving flies the card to its time in the grid: transform, opacity and clip
   expect(end).toBeLessThanOrEqual(800)
 
   const targets = started.map((s) => `${s.target}: ${s.properties.join(",")}`)
-  expect(targets).toEqual(expect.arrayContaining(["bar: opacity", "flying card: transform", "highlighter: clipPath"]))
+  expect(targets).toEqual(expect.arrayContaining(["bar: opacity", "flying card: transform"]))
   // In the grid every card keeps its own time, so nothing makes room.
   expect(targets.filter((t) => t.startsWith("card Gym") || t.startsWith("card Lunch"))).toEqual([])
 })
@@ -152,22 +150,17 @@ test("in a phone's day list, the cards below slide down to make room, finishing 
   expect(lunch.delay + lunch.duration).toBe(flight.duration)
 })
 
-test("then the highlighter draws across the new title from left to right, and stays", async ({ page }) => {
+test("then the new card keeps an accent ring, which doesn't fly with the copy or move", async ({ page }) => {
   await goHome(page, week())
   await saveDentist(page)
   await settled(page)
 
-  const started = await startedSince(page)
-  const flight = started.find((s) => s.target === "flying card" && s.properties.includes("transform"))!
-  const draw = started.find((s) => s.target === "highlighter")!
-  expect(draw.first.clipPath).toBe("inset(0px 100% 0px 0px)")
-  expect(draw.last.clipPath).toBe("inset(0px)")
-  expect(draw.delay).toBe(flight.duration)
-
-  const marker = page.locator("[data-marker]")
-  await expect(marker).toHaveCount(1)
-  await expect(marker).toHaveCSS("clip-path", "none")
-  await expect(marker).toHaveText("Dentist")
+  const newest = page.locator("[data-newest]")
+  await expect(newest).toHaveCount(1)
+  await expect(newest).toHaveAttribute("aria-label", /^Dentist/)
+  expect(await newest.evaluate((el) => getComputedStyle(el, "::after").borderTopStyle)).toBe("solid")
+  expect(await flyingCards(page)).toHaveLength(1)
+  expect((await startedSince(page)).map((s) => s.target)).not.toContain("card Dentist")
 })
 
 test("the flying card is a hidden copy above the closing bar, and nothing is left behind", async ({ page }) => {
@@ -200,14 +193,14 @@ test("the bar fades out after a save, still showing the form, but Esc still clos
   expect(await startedSince(page)).toEqual([])
 })
 
-test("with reduced motion nothing moves: the bar, the card and the highlighter just fade", async ({ page }) => {
+test("with reduced motion nothing moves: the bar and the card just fade", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" })
   await goHome(page, week())
   await saveDentist(page)
   await settled(page)
 
   const started = await startedSince(page)
-  expect(started.map((s) => s.target)).toEqual(expect.arrayContaining(["bar", "card Dentist", "highlighter"]))
+  expect(started.map((s) => s.target)).toEqual(expect.arrayContaining(["bar", "card Dentist"]))
   expect(started.map((s) => s.target)).not.toContain("flying card")
   for (const s of started) {
     expect(s.properties, s.target).toEqual(["opacity"])
@@ -223,7 +216,7 @@ test("a reminder for another week doesn't fly; only the bar fades", async ({ pag
   expect(new Set((await startedSince(page)).map((s) => s.target))).toEqual(new Set(["bar"]))
 })
 
-test("when the day is off screen there's nowhere to fly: the card fades in, then the highlighter draws", async ({ page }) => {
+test("when the day is off screen there's nowhere to fly: the card fades in", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 480 })
   await goHome(page, week())
   await saveDentist(page, "22112026")
@@ -232,6 +225,6 @@ test("when the day is off screen there's nowhere to fly: the card fades in, then
   const started = await startedSince(page)
   expect(started.map((s) => s.target)).not.toContain("flying card")
   expect(started.map((s) => `${s.target}: ${s.properties.join(",")}`)).toEqual(
-    expect.arrayContaining(["card Dentist: opacity", "highlighter: clipPath"])
+    expect.arrayContaining(["card Dentist: opacity"])
   )
 })

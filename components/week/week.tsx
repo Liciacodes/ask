@@ -3,13 +3,14 @@
 import { Button } from "@ui-sdk/react/button"
 import { createParts } from "@ui-sdk/react/primitive"
 import type { TransferMessage } from "@ui-sdk/core"
-import { useEffect, useId, useState, type CSSProperties, type ReactNode, type Ref } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react"
 import { CheckIcon } from "@/components/command-bar/icons"
+import type { Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
 import { localDateTime } from "@/lib/time"
-import { CategoryIcon, categoryLook } from "./category-look"
+import { CategoryIcon, categoryLook, dashedLook } from "./category-look"
 import { dayKey, timeOf, type Day } from "./days"
-import { gridHeight, HOUR, hourLabels, hoursShown, nowTop, placeCards, type Hours } from "./grid"
+import { gridHeight, HOUR, hourLabels, hoursShown, nowTop, placeCards, type Hours, type Placed } from "./grid"
 import { canMoveTo } from "./moves"
 import { weekBoard, type MoveDetails } from "./primitive"
 import type { WeekState } from "./use-week"
@@ -21,8 +22,49 @@ const HEADER = 72
 
 const at = (vars: Record<string, string>) => vars as CSSProperties
 
-const hourLabel = (hour: number) =>
-  new Intl.DateTimeFormat(undefined, { timeStyle: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2000, 0, 1, hour)))
+const clock = (hour: number, minute = 0) =>
+  new Intl.DateTimeFormat(undefined, { timeStyle: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2000, 0, 1, hour, minute)))
+const hourLabel = (hour: number) => clock(hour)
+
+const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)" // the --ease-out token in globals.css
+const LEAVE_MS = 150 // a dashed card you said no to fades out
+const LAND_MS = 200 // one you said yes to fills to solid
+// How far a dashed card scrolled into view stays from the screen's top or the bar's.
+const CLEAR = 12
+
+const prefersReduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches
+
+// A card the bar is waiting on, not saved yet, at the day and local time it would have: a new reminder, or a change
+// that `replaces` one in the week.
+type Dashed = { id: string; title: string; category: Category; day: string; time: string; replaces?: string }
+
+// The dashed card's place among a day's cards, which are keyed by reminder id.
+const DASHED = "dashed"
+
+// "18:00" as the person's clock says it, like the cards' own times.
+const clockOf = (time: string) => {
+  const [hour, minute] = time.split(":").map(Number)
+  return clock(hour, minute)
+}
+
+// What a dashed card shows: the card's icon and title, and its time "· not saved". The same face lies over a card that
+// has just been saved, and fades to show it.
+function DashedFace({ title, category, time }: { title: string; category: Category; time: string }) {
+  return (
+    <>
+      <span data-card-icon="" className={`grid size-5.5 shrink-0 place-items-center rounded-[7px] ${dashedLook[category].tile}`}>
+        <CategoryIcon category={category} />
+      </span>
+      <span data-card-words="" className="flex min-w-0 flex-1 flex-col">
+        <span className="text-[13px] leading-tight font-bold wrap-break-word md:truncate">{title}</span>
+        <span className="text-[11px] font-semibold tabular-nums">{time} · not saved</span>
+      </span>
+    </>
+  )
+}
+
+// The border takes 2px of the card's padding, so the words sit exactly where the saved card's will.
+const dashedCard = "rounded-xl border-2 border-dashed bg-surface px-1.5 py-1"
 
 // What a screen reader calls a card. Its colour and icon don't reach them, so its category is in the words.
 function cardName(reminder: ReminderJson, timezone: string) {
@@ -88,15 +130,73 @@ type WeekProps = {
   days: Day[]
   timezone: string
   state: WeekState
-  marked: string | null
+  // The newest card, ringed in the accent.
+  newest: string | null
   // Reminders whose move is still saving: they can't be picked up until the server answers.
   saving: ReadonlySet<string>
+  // The card the bar is waiting on, where it would go, and the reminder a yes to it has just saved there.
+  dashed: Dashed | null
+  landing: string | null
+  onLanded: () => void
+  // While the bar is open, the week keeps room below it to scroll a dashed card above the bar.
+  barOpen: boolean
   onMove: (reminder: ReminderJson, day: string) => void
   ref: Ref<HTMLOListElement>
 }
 
-function Week({ days, timezone, state, marked, saving, onMove, ref }: WeekProps) {
+function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded, barOpen, onMove, ref }: WeekProps) {
   const moveHint = useId()
+
+  // The dashed card shows while the bar waits on it, and fades out after a no. One that a yes has just saved goes
+  // at once: its card takes its place, under a copy of its dashed face that fades (`landing`).
+  const [last, setLast] = useState(dashed)
+  const [leaving, setLeaving] = useState<Dashed | null>(null)
+  if (dashed?.id !== last?.id) {
+    setLast(dashed)
+    setLeaving(last && !dashed && landing === null && !prefersReduced() ? last : null)
+  }
+  const shownDashed = dashed ?? leaving
+  const dashedEl = useRef<HTMLLIElement>(null)
+  const landingFace = useRef<HTMLSpanElement>(null)
+  const room = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const card = dashedEl.current
+    if (!leaving || !card) return
+    const fade = card.animate([{ opacity: 1 }, { opacity: 0 }], { duration: LEAVE_MS, easing: EASE_OUT, fill: "forwards" })
+    fade.finished.then(() => setLeaving(null), () => {})
+    return () => fade.cancel()
+  }, [leaving])
+
+  useLayoutEffect(() => {
+    if (!landing) return
+    const face = landingFace.current
+    if (!face || prefersReduced()) return onLanded()
+    const fill = face.animate([{ opacity: 1 }, { opacity: 0 }], { duration: LAND_MS, easing: EASE_OUT, fill: "forwards" })
+    fill.finished.then(onLanded, () => {})
+    return () => fill.cancel()
+  }, [landing, onLanded])
+
+  // A dashed card off screen, or under the docked bar, scrolls just far enough into view, and so does the card it
+  // becomes, as the bar grows by its "Saved" line. The room below the week lets one late in the day rise above the bar.
+  const dashedId = dashed?.id
+  useLayoutEffect(() => {
+    const below = room.current
+    if (!below) return
+    if (!barOpen) {
+      below.style.height = ""
+      return
+    }
+    const card = dashedId ? dashedEl.current : landing ? landingFace.current?.parentElement : null
+    if (!card) return
+    // The bar's place in the layout, not as its opening animation draws it.
+    const bar = document.querySelector<HTMLElement>('[data-slot="command-bar-content"]')
+    const barTop = bar ? bar.offsetTop : innerHeight
+    below.style.height = `${Math.max(0, innerHeight - barTop)}px`
+    const box = card.getBoundingClientRect()
+    const by = box.bottom + CLEAR > barTop ? box.bottom + CLEAR - barTop : box.top < CLEAR ? box.top - CLEAR : 0
+    if (by !== 0) scrollBy({ top: by, behavior: prefersReduced() ? "instant" : "smooth" })
+  }, [dashedId, landing, barOpen])
   const reminders = state.status === "ready" ? state.reminders : []
   const byId = new Map(reminders.map((reminder) => [reminder.id, reminder]))
   const dayOf = (reminder: ReminderJson) => dayKey(new Date(reminder.due_at), timezone)
@@ -131,7 +231,16 @@ function Week({ days, timezone, state, marked, saving, onMove, ref }: WeekProps)
     return reminder && cardName(reminder, timezone)
   }
   const timeIn = (reminder: ReminderJson) => localDateTime(new Date(reminder.due_at), timezone).time
-  const hours = hoursShown(reminders.filter((reminder) => dayOf(reminder) in lists).map(timeIn))
+  const hours = hoursShown([
+    ...reminders.filter((reminder) => dayOf(reminder) in lists).map(timeIn),
+    ...(shownDashed && shownDashed.day in lists ? [shownDashed.time] : []),
+  ])
+  const spotAt = (spot: Placed) =>
+    at({
+      "--top": `${spot.top + 2}px`,
+      "--left": `calc(${(spot.lane * 100) / spot.lanes}% + 4px)`,
+      "--width": `calc(${100 / spot.lanes}% - 8px)`,
+    })
   const dayLabel = (key: string) => days.find((day) => day.key === key)?.label
   // The drop says nothing itself: the status line says "Moved…" or "Couldn't move…" once the server answers.
   const message = ({ type, label, list }: TransferMessage) =>
@@ -185,11 +294,13 @@ function Week({ days, timezone, state, marked, saving, onMove, ref }: WeekProps)
               className="relative flex gap-3 border-b border-line px-1 py-3 last:border-b-0 md:flex-col md:gap-0 md:border-b-0 md:border-l md:border-line-faint md:p-0"
             >
               {({ cards }) => {
-                const shown = inTimeOrder(cards)
-                const placed = placeCards(
-                  shown.map((reminder) => ({ id: reminder.id, time: timeIn(reminder) })),
-                  hours
-                )
+                // The day's cards, and the dashed card among them at its time, after any card at the same time.
+                const ghost = shownDashed?.day === day.key ? shownDashed : null
+                const slots = [
+                  ...inTimeOrder(cards).map((reminder) => ({ id: reminder.id, time: timeIn(reminder) })),
+                  ...(ghost ? [{ id: DASHED, time: ghost.time }] : []),
+                ].sort((a, b) => a.time.localeCompare(b.time))
+                const placed = placeCards(slots, hours)
                 return (
                   <>
                     <h3 aria-label={day.label} className="flex w-12 shrink-0 flex-col items-center gap-1 md:h-18 md:w-auto md:justify-center md:gap-1.5">
@@ -206,42 +317,60 @@ function Week({ days, timezone, state, marked, saving, onMove, ref }: WeekProps)
                       aria-label={day.label}
                       className={`flex min-w-0 flex-1 flex-col gap-2 md:relative md:block md:h-(--grid) md:flex-none md:hour-lines ${day.today ? "md:bg-today" : ""}`}
                     >
-                      {shown.map((reminder) => {
-                        const spot = placed.get(reminder.id)!
+                      {slots.map(({ id }) => {
+                        const spot = placed.get(id)!
+                        // Hidden from screen readers, who hear the bar's card, and out of reach of the pointer and
+                        // the keyboard: it isn't a card yet.
+                        if (id === DASHED && ghost) {
+                          return (
+                            <li
+                              key={`dashed-${ghost.id}`}
+                              ref={dashedEl}
+                              aria-hidden="true"
+                              data-dashed=""
+                              style={spotAt(spot)}
+                              className={`@container pointer-events-none flex min-h-11 items-center gap-2 md:absolute md:top-(--top) md:left-(--left) md:h-11 md:w-(--width) ${dashedCard} ${dashedLook[ghost.category].card}`}
+                            >
+                              <DashedFace title={ghost.title} category={ghost.category} time={clockOf(ghost.time)} />
+                            </li>
+                          )
+                        }
+                        const reminder = byId.get(id)!
                         const look = categoryLook[reminder.category]
                         return (
                           <parts.Card
                             key={reminder.id}
                             value={reminder.id}
                             data-id={reminder.id}
+                            data-newest={newest === reminder.id ? "" : undefined}
+                            data-replaced={dashed?.replaces === reminder.id ? "" : undefined}
+                            data-dimming={shownDashed?.replaces === reminder.id ? "" : undefined}
                             aria-label={cardName(reminder, timezone)}
                             aria-describedby={locked(reminder.id) ? undefined : moveHint}
-                            style={at({
-                              "--top": `${spot.top + 2}px`,
-                              "--left": `calc(${(spot.lane * 100) / spot.lanes}% + 4px)`,
-                              "--width": `calc(${100 / spot.lanes}% - 8px)`,
-                            })}
-                            className={`@container flex min-h-11 items-center gap-2 rounded-xl px-2 py-1.5 outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent md:absolute md:top-(--top) md:left-(--left) md:h-11 md:w-(--width) ${look.card}`}
+                            style={spotAt(spot)}
+                            className={`@container relative flex min-h-11 items-center gap-2 rounded-xl px-2 py-1.5 outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent md:absolute md:top-(--top) md:left-(--left) md:h-11 md:w-(--width) ${look.card}`}
                           >
                             <span aria-hidden="true" data-card-icon="" className={`grid size-5.5 shrink-0 place-items-center rounded-[7px] ${look.tile}`}>
                               <CategoryIcon category={reminder.category} />
                             </span>
                             <span data-card-words="" className="flex min-w-0 flex-1 flex-col">
-                              <span className="relative text-[13px] leading-tight font-bold wrap-break-word md:truncate">
-                                {marked === reminder.id && (
-                                  // The same words in highlighter, behind the real ones, so it wraps exactly as they do.
-                                  <span aria-hidden="true" data-marker="" className="absolute inset-0 text-transparent">
-                                    <span className="box-decoration-clone highlighter">{reminder.title}</span>
-                                  </span>
-                                )}
-                                <span className="relative">{reminder.title}</span>
-                              </span>
+                              <span className="text-[13px] leading-tight font-bold wrap-break-word md:truncate">{reminder.title}</span>
                               <span className="flex items-center gap-1 text-[11px] font-semibold tabular-nums">
                                 <time dateTime={reminder.due_at}>{timeOf(reminder, timezone)}</time>
                                 {reminder.status === "sent" && <CheckIcon aria-hidden={false} aria-label="Sent" role="img" className="size-3" />}
                                 {reminder.status === "failed" && <span className="truncate">Not sent</span>}
                               </span>
                             </span>
+                            {landing === reminder.id && (
+                              <span
+                                ref={landingFace}
+                                aria-hidden="true"
+                                data-landing=""
+                                className={`absolute inset-0 flex items-center gap-2 ${dashedCard} ${dashedLook[reminder.category].card}`}
+                              >
+                                <DashedFace title={reminder.title} category={reminder.category} time={timeOf(reminder, timezone)} />
+                              </span>
+                            )}
                           </parts.Card>
                         )
                       })}
@@ -254,8 +383,9 @@ function Week({ days, timezone, state, marked, saving, onMove, ref }: WeekProps)
           ))}
         </parts.Root>
       </div>
+      <div ref={room} aria-hidden="true" data-room="" />
     </>
   )
 }
 
-export { Week, WeekNote }
+export { Week, WeekNote, type Dashed }

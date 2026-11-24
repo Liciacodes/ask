@@ -305,6 +305,30 @@
   opacity: 0.45;
 }
 
+/* The newest card keeps an accent ring, a pixel clear of it so it shows on a work card too. */
+[data-slot="week-board-card"][data-newest]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--accent);
+  border-radius: 15px;
+  pointer-events: none;
+}
+
+/* A card a waiting change would move fades to half strength while the dashed card shows where it would go, and back
+   when you say no. */
+[data-slot="week-board-card"][data-dimming] {
+  transition: opacity 150ms var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+[data-slot="week-board-card"][data-replaced] {
+  opacity: 0.5;
+}
+
 body {
   background: var(--page);
   color: var(--ink);

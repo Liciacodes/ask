@@ -20,7 +20,7 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 | 5 | The time grid, and the phone day list | Done |
 | 6 | The Ask bar in the new look | Done |
 | 6b | Ask again when a message with a date or time "isn't understood" | Done |
-| 7 | The dashed "not saved" card | Next |
+| 7 | The dashed "not saved" card | Done |
 | 9 | Tidy up, and the deploy notes | Before launch |
 | 8 | Drag motion and the phone grip | After launch |
 | 10 | The Chrome extension that breaks drag and Ask | After launch |
@@ -147,35 +147,64 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 
 **Your decision on the weather question.** The retry's wording stays. A question offering a reminder is fine: it's friendly, and Ask is a reminder app. The test sentence is marked `orOffersReminder`. Its live test accepts either "didn't understand" or a question that mentions a reminder, as long as no card is proposed. The API test still sends the "didn't understand" answer twice. This wasn't checked live again.
 
+### Step 7: the dashed "not saved" card
+- **When it shows.** While a create or change card waits for your OK, and while it saves after your yes, the week shows a white card with a 2px dashed border and words in the category's ink, at its date and time, reading "18:00 · not saved" in your clock's format.
+  - A work card's ink is white, so on white its border and words take the accent, and its icon tile is the accent with a white icon.
+  - It takes a lane like any card, after cards at the same time. On a phone it sits in the day's list in time order.
+  - For a change, the original card fades to half strength in 150ms.
+  - Nothing shows for cancel or restore, for a date outside this week, or once the bar is closed or back at its list.
+- **How it's wired.**
+  - `useAgent` reports the `proposal`: the card waiting, or the one saving after your yes, with the reminder a change `replaces`.
+  - `CommandBar` passes it on (`onProposal`) only while its conversation is open, and says when it opens and closes (`onOpenChange`).
+  - The page turns it into the week's `Dashed` card (`dashedFor` in `app/page.tsx`) and the hint line's words (`dashedHint`).
+  - In `Week`, the dashed card is an `li` with `aria-hidden`, no tab stop and no pointer events. It isn't one of the transfer's cards, so it can't be dragged.
+- **Scrolling.** If the dashed card is off screen or under the docked bar, the page scrolls just far enough to leave it 12px clear, smoothly, or at once under reduced motion. When it becomes a card, the bar grows by its "Saved" line, so the new card is kept clear again.
+  - A late card may have no page left below it to scroll into. While the bar is open, the week adds room under itself, as tall as the bar (`data-room`), and drops it when the bar closes.
+- **Hint line.** "↵ save · esc don't save · the dashed card on Friday shows where it will go", or "the dashed card today…".
+- **On yes.** The dashed card stays while the server saves. When the saved reminder arrives at that day and time, the real card takes the dashed card's place. A copy of the dashed face lies over it and fades out over 200ms ease-out, so the dashed border reads as filling to solid. Agent saves don't fly.
+- **On no.** It fades out over 150ms, and a changed card's original comes back to full strength.
+- **Reduced motion.** Both happen at once.
+- **Form saves** keep their flight from the bar into the slot.
+- **The new card's ring.** The highlighter on a new card's title is gone. The newest card has an accent ring instead, 1px clear of it so it shows on a work card too, and it stays. The flying copy doesn't carry it. A save from a conversation with no dashed card, like one that finishes after the bar closed, fades in as before (`playFadeIn`).
+- **Tests** (`e2e/dashed-card.spec.ts`, 15):
+  - its day, place at 18:00, words, dashed border in the category's ink, white background, and the hint;
+  - hidden from screen readers, no tab stop, no pointer events, and not a card of the day;
+  - Esc: one 150ms opacity fade, and the week as it was;
+  - Enter: it stays while saving, then the card takes exactly its place, with one 200ms opacity fill and no flight;
+  - the accent ring on the new card only;
+  - a change: the original at half strength, the dashed card at the new place, back to full on no; on yes the card moves into the dashed card's place at full strength;
+  - cancel, and a day outside this week, show none and no hint;
+  - closing the bar takes it away;
+  - under the bar it scrolls to 12px clear, and the saved card stays clear; one already in view doesn't scroll;
+  - on a phone, its place in the day's list;
+  - reduced motion, for yes and for no;
+  - only transform and opacity animate, from asking to saving.
+- **Other tests.**
+  - `e2e/contrast.spec.ts` measures the dashed card and a dashed swatch for every category, light and dark.
+  - `e2e/save-flight.spec.ts` checks the ring instead of the highlighter, and that only transform and opacity animate.
+  - `e2e/agent.spec.ts` checks the ring on an agent save.
+- **Breaks, each caught.**
+  | Break | Caught by |
+  | --- | --- |
+  | No fade on no | Esc |
+  | No fill on yes | Enter, and only transform and opacity |
+  | No scroll | under the bar |
+  | The original card not dimmed | a change |
+  | Heard by screen readers, reachable by the pointer | hidden from screen readers |
+  | A dashed card for a cancel | cancel and outside the week |
+  | Still shown after the bar closes | closing the bar |
+  | Reduced motion ignored | both reduced-motion tests |
+  | The fill animating clip-path | only transform and opacity, and Enter |
+
 ---
 
 ## Next
 
-### Step 7: the dashed "not saved" card
-- **When it shows.** While a create or change card waits for your OK, the week shows a white card with a dashed border in the category's colour, at its date and time, reading "6:00 PM · not saved".
-  - For a change, the original card fades to half strength.
-  - Nothing shows for cancel or restore, or for a date outside this week.
-- **How it's wired.**
-  - `CommandBar` reports the waiting preview (`onWaiting`), and the page passes it to `Week`.
-  - The dashed card is hidden from screen readers, because the bar's card is what they hear.
-  - It can't be dragged or focused.
-  - If it's off screen or under the docked bar, the page scrolls just enough to show it.
-- **Hint line.** It mentions the dashed card when one shows (moved here from step 6).
-- **On yes:** the dashed card becomes the real one in place, its dashed border filling to solid in one 200ms ease-out. Agent saves don't fly.
-- **On no:** it fades out over 150ms.
-- **Reduced motion:** both happen instantly.
-- **Form saves** keep their flight from the bar into the slot.
-- **Highlighter.** The highlighter on a new card's title becomes an accent ring that stays.
-- **Tests.**
-  - The dashed card's place and text.
-  - It goes on no and becomes the card on yes.
-  - It scrolls into view.
-  - Reduced motion.
-  - Only transform and opacity animate.
-
-### Step 9: tidy up, before launch
-- **Leftovers.** Remove what the old Index card look left behind, like `--veil`, which is unused since step 6, and the highlighter once step 7 replaces it.
-- **CLAUDE.md.** Update the week notes for the grid, lanes and phone list.
+### Step 9: tidy up, before launch (Thursday 26 November)
+- **Leftovers.**
+  - Remove what the old Index card look left behind, like `--veil`, which is unused since step 6.
+  - The week's cards lost their highlighter in step 7. The highlighter stays on the status line, on the bar's card title, the chosen row in the bar, and the form's date and time fields, so `--marker` and the `highlighter` utility stay.
+- **CLAUDE.md.** Update the week notes for the grid, lanes and phone list, the dashed card, and the newest card's ring.
 - **Deploy notes.** Main needs `prisma migrate deploy`, run by you, before the code that reads `category` is deployed.
 - **Final checks.**
   - Full suites, plus contrast in light and dark.

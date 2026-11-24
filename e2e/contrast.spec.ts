@@ -16,8 +16,9 @@ type Low = { text: string; ratio: number; needs: number }
 
 // Runs in the page. Each element with words of its own: its colour, faded by any opacity above it, against each
 // background that can be behind it (with and without a highlighter stroke), at the worst of them. While the bar is
-// open, only the bar counts: the page behind it is dimmed and out of reach.
-function lowContrast(): Low[] {
+// open, only the bar counts: the page behind it is dimmed and out of reach. With a `scope`, only what's inside it
+// counts, bar or not.
+function lowContrast(scope: string | null): Low[] {
   type Rgba = [number, number, number, number]
   const parse = (value: string): Rgba[] =>
     [...value.matchAll(/rgba?\(([^)]*)\)|color\(srgb ([^)]*)\)/g)].map((match) => {
@@ -64,8 +65,10 @@ function lowContrast(): Low[] {
   const open = document.querySelector("dialog:modal, [role=dialog][aria-modal=true]")
   const low: Low[] = []
   for (const element of document.body.querySelectorAll("*")) {
-    // A picker's list opens in a layer of its own, above the bar, so it counts too.
-    if (open && !open.contains(element) && !element.closest('[data-slot="select-content"]')) continue
+    if (scope) {
+      if (!element.closest(scope)) continue
+      // A picker's list opens in a layer of its own, above the bar, so it counts too.
+    } else if (open && !open.contains(element) && !element.closest('[data-slot="select-content"]')) continue
     const field = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element : null
     const words = field
       ? field.value || field.placeholder
@@ -86,9 +89,30 @@ function lowContrast(): Low[] {
   return low
 }
 
-async function expectReadable(page: Page) {
+async function expectReadable(page: Page, scope: string | null = null) {
   await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== "running"))
-  expect(await page.evaluate(lowContrast)).toEqual([])
+  expect(await page.evaluate(lowContrast, scope)).toEqual([])
+}
+
+// Each kind of reminder's dashed card, as the week draws one that isn't saved yet: its words on white, its icon on its
+// tile. A work card's words take the accent, and its tile is the accent with a white icon.
+async function addDashedSwatches(page: Page, categories: readonly string[]) {
+  await page.evaluate((names) => {
+    const shelf = document.createElement("div")
+    shelf.dataset.dashedSwatches = ""
+    for (const name of names) {
+      const work = name === "work"
+      const card = document.createElement("div")
+      card.style.cssText = `background-color: var(--surface); color: var(${work ? "--accent" : `--${name}-ink`}); padding: 8px; font-size: 11px; font-weight: 600`
+      const tile = document.createElement("span")
+      tile.dataset.graphic = ""
+      tile.style.cssText = `background-color: var(--${work ? "work" : `${name}-tile`}); ${work ? "color: var(--work-ink);" : ""} padding: 2px`
+      tile.textContent = "■"
+      card.append(tile, ` ${name}: 18:00 · not saved`)
+      shelf.append(card)
+    }
+    document.querySelector("main")!.append(shelf)
+  }, categories)
 }
 
 // Each kind of reminder's colours, before any screen uses them: its words on its card, and its icon on its tile.
@@ -173,6 +197,21 @@ for (const colorScheme of ["light", "dark"] as const) {
 
       await expect(bar(page).getByRole("button", { name: "Save changes" })).toBeVisible()
       await expectReadable(page)
+    })
+
+    test("a dashed card waiting for your OK, in every kind of reminder's colours", async ({ page }) => {
+      const card = { title: "Call Ada", description: null, date: "2026-11-20", time: "18:00", category: "call" } as const
+      await fakeAgent(page, turn(proposes("createReminder", { title: "Call Ada", date: "2026-11-20", time: "18:00", category: "call" }, { action: "create", reminder: card })))
+      await goHome(page)
+      await openBar(page)
+      await page.keyboard.type("call ada friday at 6pm")
+      await page.keyboard.press("Enter")
+      await expect(page.locator("[data-dashed]")).toBeVisible()
+      await addDashedSwatches(page, CATEGORIES)
+
+      // Proves the dashed card's own words are among those measured.
+      expect(await page.locator("[data-dashed]").getByText("18:00 · not saved").count()).toBe(1)
+      await expectReadable(page, "[data-dashed], [data-dashed-swatches]")
     })
 
     test("the week when it can't load", async ({ page }) => {

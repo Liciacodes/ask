@@ -1,7 +1,7 @@
 "use client"
 
 import { createParts } from "@ui-sdk/react/primitive"
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import type { ReminderJson } from "@/lib/reminders"
 import { commands, type Command } from "./commands"
 import { Conversation, wording } from "./conversation"
@@ -9,7 +9,7 @@ import { AskIcon, BellIcon, SparkleIcon } from "./icons"
 import { ASK, commandBar, createCommandBarController } from "./primitive"
 import { ReminderForm } from "./reminder-form"
 import { fieldRow, fieldText } from "./styles"
-import { useAgent, type Agent, type Done } from "./use-agent"
+import { useAgent, type Agent, type Done, type Proposal } from "./use-agent"
 import { playSwap, snapshot, type Snapshot } from "./view-swap"
 
 const parts = createParts(commandBar, {
@@ -46,13 +46,15 @@ const hints = {
 
 type View = keyof typeof hints | "conversation"
 
-// What Enter and Esc do right now in the conversation. Nothing while an action you approved is running.
-function conversationHints(agent: Agent): Hint[] {
+// What Enter and Esc do right now in the conversation, and where the week shows the card. Nothing while an action
+// you approved is running.
+function conversationHints(agent: Agent, dashedHint: string | undefined): Hint[] {
   if (agent.waiting) {
     const words = wording[agent.waiting.preview.action]
     return [
       [["↵"], words.approve.toLowerCase()],
       [["esc"], words.decline.toLowerCase()],
+      ...(dashedHint ? [[[], dashedHint] as const] : []),
     ]
   }
   if (agent.saving) return []
@@ -69,16 +71,37 @@ type CommandBarProps = {
   // An action you approved in a conversation, once the server has carried it out.
   onAgentDone?: (done: Done) => void
   onChoose?: (command: Command) => void
+  // The action waiting on a card in the open conversation, or saving after your yes; null when there's none.
+  onProposal?: (proposal: Proposal | null) => void
+  onOpenChange?: (open: boolean) => void
+  // Where the week shows the waiting card, for the hint line, like "the dashed card on Friday shows where it will go".
+  dashedHint?: string
   children?: ReactNode
   className?: string
 }
 
 const ignore = () => {}
 
-function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children, className }: CommandBarProps) {
+function CommandBar({
+  onChoose,
+  onReminderSaved,
+  onAgentDone = ignore,
+  onProposal = ignore,
+  onOpenChange = ignore,
+  dashedHint,
+  children,
+  className,
+}: CommandBarProps) {
   const [bar] = useState(createCommandBarController)
   const [view, setView] = useState<View>("list")
+  const [open, setOpen] = useState(false)
   const agent = useAgent(onAgentDone)
+
+  // Only a card you can see counts: with the bar closed, or back at the list, the week shows nothing.
+  // A new object each render: whoever listens keeps the one they have while its id stays the same.
+  const proposal = open && view === "conversation" ? agent.proposal : undefined
+  useEffect(() => onProposal(proposal ?? null), [proposal, onProposal])
+  useEffect(() => onOpenChange(open), [open, onOpenChange])
   const root = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const paper = useRef<HTMLDivElement>(null)
@@ -124,6 +147,7 @@ function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children,
           delete root.current?.dataset.closing
           agent.reset()
           jumpTo("list")
+          setOpen(true)
           return
         }
         if (view === "reminder" && details.reason === "escape-key") {
@@ -140,6 +164,7 @@ function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children,
           else swapTo("list")
           return
         }
+        setOpen(false)
         // After a save the bar fades out showing the form, so it stays put until the next open.
         if (root.current?.dataset.closing !== "saved") jumpTo("list")
       }}
@@ -235,7 +260,7 @@ function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children,
           </div>
           <div ref={footer} aria-hidden="true" className="px-5 pt-2 pb-3.5 text-[12px] font-semibold text-muted">
             <div ref={hintRow} className="flex min-h-[22.5px] flex-wrap gap-x-5 gap-y-1.5">
-              {(view === "conversation" ? conversationHints(agent) : hints[view]).map(([keys, action]) => (
+              {(view === "conversation" ? conversationHints(agent, dashedHint) : hints[view]).map(([keys, action]) => (
                 <span key={action} className="inline-flex items-center gap-1.5">
                   {keys.map((key) => (
                     <kbd key={key} className={keycap}>
