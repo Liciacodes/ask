@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, type Route } from "@playwright/test"
+import { guessCategory, type Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
 
 const openShortcut = "ControlOrMeta+k"
@@ -10,6 +11,7 @@ const reminder = (title: string, due_at: string, extra: Partial<ReminderJson> = 
   due_at,
   timezone: "Africa/Lagos",
   status: "pending",
+  category: guessCategory(title),
   sent_at: null,
   created_at: "2026-11-10T09:00:00.000Z",
   ...extra,
@@ -20,7 +22,7 @@ async function fakeWeek(page: Page, reminders: ReminderJson[] = []) {
   await page.route("**/api/week?*", (route) => route.fulfill({ json: { timezone: "Africa/Lagos", reminders } }))
 }
 
-type Sent = { title: string; due_at: string; timezone: string }
+type Sent = { title: string; due_at: string; timezone: string; category: Category }
 
 // Answers POST /api/reminders in the browser, so no test writes to a database.
 async function fakeSave(page: Page, answer: (route: Route, sent: Sent) => Promise<void> = saved) {
@@ -50,7 +52,10 @@ async function fakeMove(page: Page, week: ReminderJson[], answer?: (route: Route
 }
 
 const saved = (route: Route, sent: Sent) =>
-  route.fulfill({ status: 201, json: reminder(sent.title, sent.due_at, { timezone: sent.timezone, created_at: "2026-11-18T09:20:00.000Z" }) })
+  route.fulfill({
+    status: 201,
+    json: reminder(sent.title, sent.due_at, { timezone: sent.timezone, category: sent.category, created_at: "2026-11-18T09:20:00.000Z" }),
+  })
 
 async function goHome(page: Page, week: ReminderJson[] | "already faked" = []) {
   // No browser test reaches the real /api/agent. A test's own fake (e2e/fake-agent.ts) is a page route, and page
@@ -59,11 +64,14 @@ async function goHome(page: Page, week: ReminderJson[] | "already faked" = []) {
   if (week !== "already faked") await fakeWeek(page, week)
   await page.goto("/")
   // Ctrl+K does nothing until React has hydrated, which is also when the shortcut label gets its text.
-  await expect(page.getByText("to open Ask").locator("kbd")).not.toBeEmpty()
+  await expect(askButton(page).locator("kbd")).not.toBeEmpty()
 }
 
+// The header's "Ask anything" button, which opens the bar like Ctrl+K. Its name includes the shortcut it shows.
+const askButton = (page: Page) => page.getByRole("button", { name: /^Ask anything/ })
 const bar = (page: Page) => page.getByRole("dialog", { name: "Ask" })
-const search = (page: Page) => page.getByRole("combobox")
+// The bar's own search, not the form's Category picker, which is a combobox too.
+const search = (page: Page) => page.getByRole("combobox", { name: "Type a command or ask anything" })
 // The bar's own options: the week's cards are options too.
 const commands = (page: Page) => bar(page).getByRole("option")
 const command = (page: Page, name: string) => bar(page).getByRole("option", { name, exact: true })
@@ -105,6 +113,7 @@ async function expectHighlighted(page: Page, option: Locator) {
 
 export {
   addTextField,
+  askButton,
   bar,
   command,
   commands,

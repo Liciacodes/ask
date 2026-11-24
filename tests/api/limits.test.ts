@@ -134,7 +134,7 @@ describe("each visitor's questions", () => {
 
   test("answering a preview card isn't a new question, so the last question of the day can still be approved", async () => {
     vi.stubEnv(QUESTIONS, "1")
-    using(fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }), says("Saved.")))
+    using(fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00", category: "call" }), says("Saved.")))
     const { chat, statuses } = barFor(TEST_VISITOR)
 
     await chat.sendMessage({ text: "Remind me to call mum on the 13th at 6pm" })

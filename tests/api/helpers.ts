@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach } from "vitest"
+import { guessCategory } from "@/lib/categories"
 import { db } from "@/lib/db"
 import type { Prisma } from "@/lib/generated/prisma/client"
 import { instantAt } from "@/lib/time"
@@ -56,11 +57,12 @@ async function saveReminder(data: Partial<Prisma.ReminderUncheckedCreateInput> =
   })
 }
 
-// The reminders a test sentence starts from, saved for the test visitor. Returns each one's id by its title.
+// The reminders a test sentence starts from, saved for the test visitor, each with the category the New reminder
+// form would give it. Returns each one's id by its title.
 async function saveAll(saved: Saved[] = [], timezone: string) {
   const ids = new Map<string, string>()
   for (const { title, date, time, status } of saved) {
-    const reminder = await saveReminder({ title, dueAt: instantAt(date, time, timezone), timezone, status })
+    const reminder = await saveReminder({ title, dueAt: instantAt(date, time, timezone), timezone, status, category: guessCategory(title) })
     ids.set(title, reminder.id)
   }
   return ids

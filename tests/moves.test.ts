@@ -12,6 +12,7 @@ const reminder = (due_at: string, extra: Partial<ReminderJson> = {}): ReminderJs
   due_at,
   timezone: LAGOS,
   status: "pending",
+  category: "health",
   sent_at: null,
   created_at: "2026-11-20T09:00:00.000Z",
   ...extra,

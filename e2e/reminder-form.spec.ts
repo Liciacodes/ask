@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 import {
   addTextField,
   bar,
@@ -44,7 +44,7 @@ test("Enter saves the reminder, closes the bar, puts focus back and shows what w
   await page.keyboard.press("Enter")
 
   await expect(bar(page)).toBeHidden()
-  expect(requests).toEqual([{ title: "Buy milk", due_at: "2026-11-18T10:00:00.000Z", timezone: "Africa/Lagos" }])
+  expect(requests).toEqual([{ title: "Buy milk", due_at: "2026-11-18T10:00:00.000Z", timezone: "Africa/Lagos", category: "shopping" }])
   await expect(status(page)).toHaveText("Saved Buy milk for Wed 18 Nov, 11:00")
   await expect(field).toBeFocused()
 })
@@ -63,7 +63,7 @@ test("the date and time can be typed with the keyboard", async ({ page }) => {
   await page.keyboard.press("Enter")
 
   await expect(bar(page)).toBeHidden()
-  expect(requests).toEqual([{ title: "Dentist", due_at: "2026-11-20T08:30:00.000Z", timezone: "Africa/Lagos" }])
+  expect(requests).toEqual([{ title: "Dentist", due_at: "2026-11-20T08:30:00.000Z", timezone: "Africa/Lagos", category: "health" }])
 })
 
 test("an empty title is caught before anything is sent", async ({ page }) => {
@@ -161,7 +161,58 @@ test("Tab moves through the form and stays inside the bar", async ({ page }) => 
     await expect(segment(page, field, unit)).toBeFocused()
   }
   await page.keyboard.press("Tab")
+  await expect(category(page)).toBeFocused()
+  await page.keyboard.press("Tab")
   await expect(page.getByRole("button", { name: "Save" })).toBeFocused()
   await page.keyboard.press("Tab")
   await expect(title(page)).toBeFocused()
+})
+
+const category = (page: Page) => bar(page).getByRole("combobox", { name: "Category" })
+const categoryOption = (page: Page, name: string) => page.getByRole("option", { name, exact: true })
+
+test("the category follows the title's keyword guess as you type, and is saved with the reminder", async ({ page }) => {
+  const requests = await fakeSave(page)
+
+  await openForm(page)
+  await expect(category(page)).toHaveText("Other")
+  await page.keyboard.type("Call mum")
+  await expect(category(page)).toHaveText("Call")
+  await title(page).fill("Dentist")
+  await expect(category(page)).toHaveText("Health")
+  await page.keyboard.press("Enter")
+
+  await expect(bar(page)).toBeHidden()
+  expect(requests.map((sent) => sent.category)).toEqual(["health"])
+})
+
+test("a category you pick stays when the title changes, and is the one saved", async ({ page }) => {
+  const requests = await fakeSave(page)
+
+  await openForm(page)
+  await page.keyboard.type("Buy milk")
+  await expect(category(page)).toHaveText("Shopping")
+  await category(page).click()
+  await categoryOption(page, "Food").click()
+  await expect(category(page)).toHaveText("Food")
+  await title(page).fill("Dentist")
+  await expect(category(page)).toHaveText("Food")
+  await title(page).press("Enter")
+
+  await expect(bar(page)).toBeHidden()
+  expect(requests.map((sent) => sent.category)).toEqual(["food"])
+})
+
+test("Esc with the category picker open closes only the picker; the next Esc goes back to the list", async ({ page }) => {
+  await openForm(page)
+  await category(page).click()
+  await expect(categoryOption(page, "Food")).toBeVisible()
+
+  await page.keyboard.press("Escape")
+  await expect(categoryOption(page, "Food")).toBeHidden()
+  await expect(title(page)).toBeVisible()
+  await expect(category(page)).toBeFocused()
+
+  await page.keyboard.press("Escape")
+  await expect(search(page)).toBeFocused()
 })

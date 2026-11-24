@@ -2,7 +2,8 @@
 
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import { CommandBar, CommandBarShortcut, keycap } from "@/components/command-bar/command-bar";
+import { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap } from "@/components/command-bar/command-bar";
+import { CalendarIcon, SparkleIcon } from "@/components/command-bar/icons";
 import type { Command } from "@/components/command-bar/commands";
 import type { Done } from "@/components/command-bar/use-agent";
 import { cardRects, playArrival, playMark } from "@/components/week/arrival";
@@ -70,7 +71,7 @@ export default function Home() {
   const shortcut = <CommandBarShortcut className={`${keycap} min-w-11 text-[12px]`} />;
 
   return (
-    <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col px-4 py-6 md:px-8 md:py-8">
+    <main className="mx-auto flex w-full max-w-[1272px] flex-1 flex-col px-4 py-6">
       <CommandBar
         onChoose={(chosen) => setOutcome({ chosen })}
         onReminderSaved={(saved, from) => {
@@ -101,18 +102,25 @@ export default function Home() {
         }}
         className="flex flex-1 flex-col"
       >
-        <header className="flex items-center justify-between gap-4">
-          <h1 className="text-[15px] font-semibold">Ask</h1>
-          <p className="text-[13px] text-hint">Press {shortcut} to open Ask</p>
-        </header>
-        <section aria-labelledby="week-title" className="mt-8 flex flex-1 flex-col">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <h2 id="week-title" className="text-[24px] font-semibold tracking-[-0.01em]">
-              This week
-            </h2>
-            {week && <p className="text-[15px] text-hint">{week.range}</p>}
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-fill text-on-accent">
+              <CalendarIcon className="size-5" />
+            </span>
+            {week && <h1 className="text-[26px] leading-tight font-extrabold tracking-[-0.02em]">{week.title}</h1>}
           </div>
-          <div className="mt-1 flex min-h-6 flex-wrap items-center gap-x-5 gap-y-1 text-[14px]">
+          <CommandBarTrigger className="flex min-h-11 items-center gap-2.5 rounded-full bg-accent-fill py-1 pr-2 pl-4 text-[14px] font-bold text-on-accent outline-offset-2 transition-transform duration-160 ease-out focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100">
+            <SparkleIcon className="size-4" />
+            Ask anything
+            <CommandBarShortcut className="min-w-11 rounded-full bg-white/10 px-2.5 py-1 text-center font-sans text-[12px] font-bold" />
+          </CommandBarTrigger>
+        </header>
+        <section aria-labelledby="week-title" className="mt-5 flex flex-1 flex-col">
+          {/* The month title and each day's date say which week it is; this names it for screen readers. */}
+          <h2 id="week-title" className="sr-only">
+            This week{week && `, ${week.range}`}
+          </h2>
+          <div className="flex min-h-6 flex-wrap items-center gap-x-5 gap-y-1 text-[14px]">
             <p role="status" className="empty:-me-5">
               {outcome && "chosen" in outcome && (
                 <>

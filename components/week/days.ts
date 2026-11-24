@@ -11,6 +11,13 @@ const dayKey = (date: Date, timeZone: string) =>
 
 type Day = { key: string; weekday: string; number: string; label: string; today: boolean }
 
+// The page's title: the week's month, "November 2026", or both when it spans two, "Nov – Dec 2026".
+function monthTitle(first: Date, last: Date, timeZone: string, locale?: string) {
+  const month = (date: Date) => dayKey(date, timeZone).slice(0, 7)
+  if (month(first) === month(last)) return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric", timeZone }).format(first)
+  return new Intl.DateTimeFormat(locale, { month: "short", year: "numeric", timeZone }).formatRange(first, last)
+}
+
 function weekDays(now: Date, timeZone: string) {
   const { from, to } = weekRange(now, timeZone)
   const today = dayKey(now, timeZone)
@@ -24,7 +31,7 @@ function weekDays(now: Date, timeZone: string) {
     today: dayKey(noon, timeZone) === today,
   }))
   const range = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", timeZone }).formatRange(noons[0], noons[6])
-  return { from, to, days, range }
+  return { from, to, days, range, title: monthTitle(noons[0], noons[6], timeZone) }
 }
 
 const timeOf = (reminder: ReminderJson, timeZone: string) =>
@@ -45,4 +52,4 @@ function localWhen({ date, time }: { date: string; time: string }) {
   }
 }
 
-export { dayKey, localWhen, timeOf, weekDays, whenOf, type Day }
+export { dayKey, localWhen, monthTitle, timeOf, weekDays, whenOf, type Day }

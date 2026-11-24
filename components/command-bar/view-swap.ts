@@ -22,7 +22,8 @@ function snapshot({ paper, footer, view }: Omit<SwapParts, "panel" | "hints">): 
   copy.inert = true
   copy.setAttribute("aria-hidden", "true")
   copy.dataset.leaving = ""
-  Object.assign(copy.style, { position: "absolute", top: "0", left: "0", right: "0", pointerEvents: "none", transformOrigin: "top center" })
+  // The bar is docked at the bottom, so a view sits just above the footer and the card's top edge is what moves.
+  Object.assign(copy.style, { position: "absolute", top: "auto", left: "0", right: "0", pointerEvents: "none", transformOrigin: "bottom center" })
   return { copy, paperHeight, footerTop, opacity }
 }
 
@@ -39,6 +40,7 @@ function playSwap(parts: SwapParts, snap: Snapshot) {
 }
 
 function startSwap({ panel, paper, footer, hints, view }: SwapParts, { copy, paperHeight, footerTop, opacity }: Snapshot) {
+  copy.style.bottom = `${footer.offsetHeight}px`
   panel.prepend(copy)
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches
   const timing: KeyframeAnimationOptions = { duration: reduced ? REDUCED_MS : SWAP_MS, easing: EASE_OUT }
@@ -53,13 +55,13 @@ function startSwap({ panel, paper, footer, hints, view }: SwapParts, { copy, pap
         copy.animate(
           [
             { opacity, filter: "blur(0px)", transform: "scale(1)", clipPath: "inset(0 0 0 0)" },
-            { opacity: 0, filter: "blur(2px)", transform: "scale(0.98)", clipPath: `inset(0 0 ${Math.max(0, -grow)}px 0)` },
+            { opacity: 0, filter: "blur(2px)", transform: "scale(0.98)", clipPath: `inset(${Math.max(0, -grow)}px 0 0 0)` },
           ],
           timing
         ),
         view.animate(
           [
-            { opacity: 0, filter: "blur(2px)", transform: "scale(0.98)", clipPath: `inset(0 0 ${Math.max(0, grow)}px 0)` },
+            { opacity: 0, filter: "blur(2px)", transform: "scale(0.98)", clipPath: `inset(${Math.max(0, grow)}px 0 0 0)` },
             { opacity: 1, filter: "blur(0px)", transform: "scale(1)", clipPath: "inset(0 0 0 0)" },
           ],
           timing

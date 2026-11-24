@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { guessCategory } from "@/lib/categories"
 import { db } from "@/lib/db"
 import type { Reminder } from "@/lib/generated/prisma/client"
 import type { newReminder, reminderChanges } from "@/lib/reminders"
@@ -9,8 +10,8 @@ import type { newReminder, reminderChanges } from "@/lib/reminders"
 type NewReminder = z.output<typeof newReminder>
 type ReminderChanges = z.output<typeof reminderChanges>
 
-function createReminder(userId: string, { title, description, due_at, timezone }: NewReminder) {
-  return db.reminder.create({ data: { userId, title, description, dueAt: due_at, timezone } })
+function createReminder(userId: string, { title, description, due_at, timezone, category }: NewReminder) {
+  return db.reminder.create({ data: { userId, title, description, dueAt: due_at, timezone, category: category ?? guessCategory(title) } })
 }
 
 // A malformed id finds nothing, the same as an id that doesn't exist or belongs to someone else.
@@ -22,14 +23,14 @@ async function findReminder(userId: string, id: string) {
 type Updated = { ok: true; reminder: Reminder } | { ok: false; reason: "status-locked"; status: Reminder["status"] }
 
 // `reminder` comes from findReminder, so it already belongs to the user.
-async function updateReminder(reminder: Reminder, { title, description, due_at, timezone, status }: ReminderChanges): Promise<Updated> {
+async function updateReminder(reminder: Reminder, { title, description, due_at, timezone, status, category }: ReminderChanges): Promise<Updated> {
   // Sent and failed belong to the sender: only pending and cancelled reminders can change status.
   if (status && reminder.status !== "pending" && reminder.status !== "cancelled") {
     return { ok: false, reason: "status-locked", status: reminder.status }
   }
   const updated = await db.reminder.update({
     where: { id: reminder.id },
-    data: { title, description, dueAt: due_at, timezone, status },
+    data: { title, description, dueAt: due_at, timezone, status, category },
   })
   return { ok: true, reminder: updated }
 }

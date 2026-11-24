@@ -133,7 +133,7 @@ test("with the keyboard, Space picks a card up, Right carries it to the next day
   await card(page, "Thursday 19 November", "Dentist").focus()
 
   await page.keyboard.press("Space")
-  await expect(announced(page)).toHaveText("Dentist, 09:00, picked up. Left and Right choose a day, Space drops it, Escape puts it back.")
+  await expect(announced(page)).toHaveText("Dentist, 09:00, health, picked up. Left and Right choose a day, Space drops it, Escape puts it back.")
   await expect(card(page, "Thursday 19 November", "Dentist")).toHaveAttribute("aria-selected", "true")
   await page.keyboard.press("ArrowRight")
   await expect(announced(page)).toHaveText("Friday 20 November")
@@ -168,7 +168,7 @@ test("Escape puts a picked-up card back, and so does Tab, which moves on: neithe
   await page.keyboard.press("Space")
   await page.keyboard.press("ArrowRight")
   await page.keyboard.press("Escape")
-  await expect(announced(page)).toHaveText("Dentist, 09:00 back on Thursday 19 November.")
+  await expect(announced(page)).toHaveText("Dentist, 09:00, health back on Thursday 19 November.")
   await expect(thursday).toBeFocused()
 
   await page.keyboard.press("Space")

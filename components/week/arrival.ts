@@ -97,7 +97,6 @@ function playArrival({ week, id, from, before }: ArrivalParts) {
     width: `${to.width}px`,
     height: `${to.height}px`,
     overflow: "visible",
-    color: "var(--ink)",
     transformOrigin: "center",
   })
   document.body.append(flying)

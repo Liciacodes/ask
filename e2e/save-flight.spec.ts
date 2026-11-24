@@ -27,7 +27,7 @@ const recordMotion = () => {
       : el.dataset.marker !== undefined
         ? "highlighter"
         : el.dataset.id
-          ? `card ${el.querySelector("p:last-of-type > span:last-child")?.textContent?.trim()}`
+          ? `card ${el.getAttribute("aria-label")?.split(",")[0]}`
           : el.dataset.barLayer !== undefined
             ? "bar"
             : el.closest("[data-flying]")
@@ -118,7 +118,7 @@ test.afterEach(async ({ page }) => {
   expect(pageErrors.get(page), "errors thrown in the page").toEqual([])
 })
 
-test("saving flies the card into its day: transform, opacity and clip-path only, one curve, done within 800ms", async ({ page }) => {
+test("saving flies the card to its time in the grid: transform, opacity and clip-path only, one curve, done within 800ms", async ({ page }) => {
   await goHome(page, week())
   await saveDentist(page)
   await settled(page)
@@ -133,13 +133,13 @@ test("saving flies the card into its day: transform, opacity and clip-path only,
   expect(end).toBeLessThanOrEqual(800)
 
   const targets = started.map((s) => `${s.target}: ${s.properties.join(",")}`)
-  expect(targets).toEqual(
-    expect.arrayContaining(["bar: opacity", "flying card: transform", "card Lunch with Ada: transform", "highlighter: clipPath"])
-  )
-  expect(targets.filter((t) => t.startsWith("card Gym"))).toEqual([])
+  expect(targets).toEqual(expect.arrayContaining(["bar: opacity", "flying card: transform", "highlighter: clipPath"]))
+  // In the grid every card keeps its own time, so nothing makes room.
+  expect(targets.filter((t) => t.startsWith("card Gym") || t.startsWith("card Lunch"))).toEqual([])
 })
 
-test("the cards below slide down to make room, finishing as the new card lands", async ({ page }) => {
+test("in a phone's day list, the cards below slide down to make room, finishing as the new card lands", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
   await goHome(page, week())
   await saveDentist(page)
   await settled(page)
