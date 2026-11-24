@@ -5,14 +5,18 @@ import { DateInput } from "@ui-sdk/react/date-input"
 import { Field, FieldError, FieldLabel } from "@ui-sdk/react/field"
 import { Input } from "@ui-sdk/react/input"
 import { Select, SelectContent, SelectItem, SelectItemIcon, SelectItemIndicator, SelectTrigger, SelectValue } from "@ui-sdk/react/select"
+import { Textarea } from "@ui-sdk/react/textarea"
 import { TimeInput } from "@ui-sdk/react/time-input"
 import { useRef, useState, type FormEvent } from "react"
 import { CategoryIcon, categoryChip, categoryName } from "@/components/week/category-look"
 import { CATEGORIES, guessCategory, type Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
+import { localDateTime } from "@/lib/time"
 import { CheckIcon } from "./icons"
 
-type Problems = { title?: string; when?: string; form?: string }
+type Problems = { title?: string; when?: string; note?: string; form?: string }
+
+const browserZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const pad = (n: number) => String(n).padStart(2, "0")
 
@@ -32,6 +36,7 @@ function problemsFrom(body: unknown): Problems {
   for (const { field, message } of issues) {
     if (field === "title") problems.title ??= message
     else if (field === "due_at") problems.when ??= message
+    else if (field === "description") problems.note ??= message
     else problems.form ??= message
   }
   return problems
@@ -41,15 +46,20 @@ const label = "text-[12px] font-bold text-muted data-invalid:text-error"
 const line = "flex h-10 w-full items-center border-b-[1.5px] border-line text-[17px] font-semibold focus-within:border-accent data-invalid:border-error"
 const error = "mt-1.5 text-[13px] font-semibold text-error"
 
-function ReminderForm({ onSaved }: { onSaved: (reminder: ReminderJson) => void }) {
-  const [defaults] = useState(nextFullHour)
+// A new reminder, or with `editing`, one from the week, filled in and saved with "Save changes".
+type ReminderFormProps = { editing?: ReminderJson; onSaved: (reminder: ReminderJson) => void }
+
+function ReminderForm({ editing, onSaved }: ReminderFormProps) {
+  // A reminder being edited starts at its own date and time, on this browser's clock, like the form saves it.
+  const [defaults] = useState(() => (editing ? localDateTime(new Date(editing.due_at), browserZone()) : nextFullHour()))
   // The browser's language, not the page's: it orders the date and picks the clock people are used to.
   const [locale] = useState(() => new Intl.DateTimeFormat().resolvedOptions().locale)
   const [saving, setSaving] = useState(false)
   const [problems, setProblems] = useState<Problems>({})
-  // The title's keyword guess, until the person picks a category themselves.
-  const [category, setCategory] = useState<Category>("other")
-  const [picked, setPicked] = useState(false)
+  // The title's keyword guess, until the person picks a category themselves. A saved reminder's category counts as
+  // picked, so editing its title never guesses again.
+  const [category, setCategory] = useState<Category>(editing?.category ?? "other")
+  const [picked, setPicked] = useState(editing !== undefined)
   const inFlight = useRef(false)
 
   const clear = (key: keyof Problems) => setProblems((current) => (current[key] ? { ...current, [key]: undefined } : current))
@@ -59,16 +69,20 @@ function ReminderForm({ onSaved }: { onSaved: (reminder: ReminderJson) => void }
     if (inFlight.current) return
     inFlight.current = true
     const form = new FormData(event.currentTarget)
+    const dueAt = new Date(`${form.get("date")}T${form.get("time")}`).toISOString()
+    // An edit sends the time only when it changed: the server turns down any time that has passed, even the same one.
+    const when = editing && new Date(editing.due_at).getTime() === new Date(dueAt).getTime() ? {} : { due_at: dueAt, timezone: browserZone() }
     setSaving(true)
     setProblems({})
     try {
-      const response = await fetch("/api/reminders", {
-        method: "POST",
+      const response = await fetch(editing ? `/api/reminders/${encodeURIComponent(editing.id)}` : "/api/reminders", {
+        method: editing ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           title: form.get("title"),
-          due_at: new Date(`${form.get("date")}T${form.get("time")}`).toISOString(),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          // An empty note clears it.
+          description: form.get("note"),
+          ...when,
           category,
         }),
       })
@@ -89,6 +103,7 @@ function ReminderForm({ onSaved }: { onSaved: (reminder: ReminderJson) => void }
         <FieldLabel className={label}>Title</FieldLabel>
         <Input
           name="title"
+          defaultValue={editing?.title}
           required
           pattern=".*\S.*"
           autoFocus
@@ -171,6 +186,24 @@ function ReminderForm({ onSaved }: { onSaved: (reminder: ReminderJson) => void }
           </Select>
         </Field>
       </div>
+      <Field invalid={problems.note ? true : undefined}>
+        <FieldLabel className={label}>Note</FieldLabel>
+        {/* Enter starts a new line here; Save saves. */}
+        <Textarea
+          name="note"
+          autoResize
+          rows={1}
+          defaultValue={editing?.description ?? ""}
+          placeholder="Optional"
+          onValueChange={() => clear("note")}
+          className="max-h-32 min-h-10 w-full resize-none border-b-[1.5px] border-line bg-transparent py-2 text-[15px] font-medium text-ink outline-none placeholder:text-muted focus:border-accent data-invalid:border-error"
+        />
+        {problems.note && (
+          <FieldError match className={error}>
+            {problems.note}
+          </FieldError>
+        )}
+      </Field>
       <div className="flex items-center justify-end gap-4">
         {problems.form && (
           <p role="alert" data-problem="" className="mr-auto text-[13px] font-semibold text-error">
@@ -183,7 +216,7 @@ function ReminderForm({ onSaved }: { onSaved: (reminder: ReminderJson) => void }
           focusableWhenDisabled
           className="min-h-11 rounded-full bg-accent-fill px-5 text-[14px] font-bold text-on-accent transition-transform duration-160 ease-out outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] data-disabled:opacity-70 motion-reduce:transition-none motion-reduce:active:scale-100"
         >
-          {saving ? "Saving…" : "Save"}
+          {saving ? "Saving…" : editing ? "Save changes" : "Save"}
         </Button>
       </div>
     </form>

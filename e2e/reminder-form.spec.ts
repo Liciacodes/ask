@@ -44,7 +44,7 @@ test("Enter saves the reminder, closes the bar, puts focus back and shows what w
   await page.keyboard.press("Enter")
 
   await expect(bar(page)).toBeHidden()
-  expect(requests).toEqual([{ title: "Buy milk", due_at: "2026-11-18T10:00:00.000Z", timezone: "Africa/Lagos", category: "shopping" }])
+  expect(requests).toEqual([{ title: "Buy milk", description: "", due_at: "2026-11-18T10:00:00.000Z", timezone: "Africa/Lagos", category: "shopping" }])
   await expect(status(page)).toHaveText("Saved Buy milk for Wed 18 Nov, 11:00")
   await expect(field).toBeFocused()
 })
@@ -63,7 +63,7 @@ test("the date and time can be typed with the keyboard", async ({ page }) => {
   await page.keyboard.press("Enter")
 
   await expect(bar(page)).toBeHidden()
-  expect(requests).toEqual([{ title: "Dentist", due_at: "2026-11-20T08:30:00.000Z", timezone: "Africa/Lagos", category: "health" }])
+  expect(requests).toEqual([{ title: "Dentist", description: "", due_at: "2026-11-20T08:30:00.000Z", timezone: "Africa/Lagos", category: "health" }])
 })
 
 test("an empty title is caught before anything is sent", async ({ page }) => {
@@ -162,6 +162,8 @@ test("Tab moves through the form and stays inside the bar", async ({ page }) => 
   }
   await page.keyboard.press("Tab")
   await expect(category(page)).toBeFocused()
+  await page.keyboard.press("Tab")
+  await expect(page.getByRole("textbox", { name: "Note" })).toBeFocused()
   await page.keyboard.press("Tab")
   await expect(page.getByRole("button", { name: "Save" })).toBeFocused()
   await page.keyboard.press("Tab")

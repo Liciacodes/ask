@@ -2,7 +2,7 @@
 
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap } from "@/components/command-bar/command-bar";
+import { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap, type CommandBarHandle } from "@/components/command-bar/command-bar";
 import { CalendarIcon, SparkleIcon } from "@/components/command-bar/icons";
 import type { Command } from "@/components/command-bar/commands";
 import type { Done, Proposal } from "@/components/command-bar/use-agent";
@@ -65,6 +65,7 @@ export default function Home() {
   const { state, retry, put, move, saving } = useWeek(timezone);
   const [newest, setNewest] = useState<string | null>(null);
   const weekList = useRef<HTMLOListElement>(null);
+  const commandBar = useRef<CommandBarHandle>(null);
   const arriving = useRef<{ id: string; from: DOMRect; before: ReturnType<typeof cardRects> } | null>(null);
   const fading = useRef<string | null>(null);
   const stopArrival = useRef<(() => void) | null>(null);
@@ -131,6 +132,14 @@ export default function Home() {
           if (dashed && at?.date === dashed.day && at.time === dashed.time) setLanding(result.reminder.id);
           else fading.current = result.reminder.id;
         }}
+        onReminderChanged={(reminder) => {
+          // Saved from the form after a click on its card: it changes in place, or moves to its new day.
+          const shows = inThisWeek(reminder);
+          setOutcome({ agent: { done: "change", reminder } });
+          put(reminder, shows);
+          if (shows) setNewest(reminder.id);
+        }}
+        ref={commandBar}
         onProposal={propose}
         onOpenChange={setBarOpen}
         dashedHint={dashedHint(dashed, week?.days)}
@@ -198,6 +207,7 @@ export default function Home() {
               landing={landing}
               onLanded={landed}
               barOpen={barOpen}
+              onOpen={(reminder) => commandBar.current?.edit(reminder)}
               onMove={async (reminder, day) => {
                 const result = await move(reminder, day);
                 setOutcome(result.ok ? { moved: result.reminder } : { notMoved: { title: reminder.title, reason: result.reason } });

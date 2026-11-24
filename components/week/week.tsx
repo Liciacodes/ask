@@ -4,7 +4,7 @@ import { Button } from "@ui-sdk/react/button"
 import { createParts } from "@ui-sdk/react/primitive"
 import type { TransferMessage } from "@ui-sdk/core"
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react"
-import { CheckIcon } from "@/components/command-bar/icons"
+import { CheckIcon, NotesIcon } from "@/components/command-bar/icons"
 import type { Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
 import { localDateTime } from "@/lib/time"
@@ -74,6 +74,8 @@ function cardName(reminder: ReminderJson, timezone: string) {
     reminder.category !== "other" && reminder.category,
     reminder.status === "sent" && "sent",
     reminder.status === "failed" && "not sent",
+    // The whole note: the card itself only has room for a line of it, or an icon.
+    reminder.description && `note: ${reminder.description}`,
   ]
     .filter(Boolean)
     .join(", ")
@@ -141,10 +143,12 @@ type WeekProps = {
   // While the bar is open, the week keeps room below it to scroll a dashed card above the bar.
   barOpen: boolean
   onMove: (reminder: ReminderJson, day: string) => void
+  // A click on a card, or Enter on it, opens it in the form to edit.
+  onOpen: (reminder: ReminderJson) => void
   ref: Ref<HTMLOListElement>
 }
 
-function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded, barOpen, onMove, ref }: WeekProps) {
+function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded, barOpen, onMove, onOpen, ref }: WeekProps) {
   const moveHint = useId()
 
   // The dashed card shows while the bar waits on it, and fades out after a no. One that a yes has just saved goes
@@ -255,7 +259,7 @@ function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded
   return (
     <>
       <p id={moveHint} hidden>
-        Press Space to move it to another day.
+        Press Enter to edit it, or Space to move it to another day.
       </p>
       {/* From tablet width up, a time grid: the hours, then a column a day with each card at its time. On a phone the
           same days stack, each with its cards in a list. */}
@@ -279,6 +283,10 @@ function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded
           lists={lists}
           accepts={accepts}
           locked={locked}
+          open={(id: string) => {
+            const reminder = byId.get(id)
+            if (reminder) onOpen(reminder)
+          }}
           label={label}
           dayLabel={dayLabel}
           message={message}
@@ -359,7 +367,19 @@ function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded
                                 <time dateTime={reminder.due_at}>{timeOf(reminder, timezone)}</time>
                                 {reminder.status === "sent" && <CheckIcon aria-hidden={false} aria-label="Sent" role="img" className="size-3" />}
                                 {reminder.status === "failed" && <span className="truncate">Not sent</span>}
+                                {/* A grid card has no room for its note: an icon says there is one, and shows it on hover.
+                                    Screen readers hear the note in the card's name. */}
+                                {reminder.description && (
+                                  <span data-note-icon="" title={reminder.description} aria-hidden="true" className="hidden md:inline-grid">
+                                    <NotesIcon className="size-3" />
+                                  </span>
+                                )}
                               </span>
+                              {reminder.description && (
+                                <span data-note="" aria-hidden="true" className="truncate text-[11px] font-medium md:hidden">
+                                  {reminder.description}
+                                </span>
+                              )}
                             </span>
                             {landing === reminder.id && (
                               <span

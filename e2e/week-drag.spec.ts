@@ -221,6 +221,6 @@ test("each day's cards are a list named after the day, and a card that can move 
 
   const thursday = page.getByRole("listbox", { name: "Thursday 19 November" })
   await expect(thursday.getByRole("option")).toHaveCount(2)
-  await expect(thursday.getByRole("option", { name: /Dentist/ })).toHaveAccessibleDescription("Press Space to move it to another day.")
+  await expect(thursday.getByRole("option", { name: /Dentist/ })).toHaveAccessibleDescription("Press Enter to edit it, or Space to move it to another day.")
   await expect(thursday.getByRole("option", { name: /Pay rent/ })).not.toHaveAttribute("aria-describedby")
 })

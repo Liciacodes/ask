@@ -21,6 +21,7 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 | 6 | The Ask bar in the new look | Done |
 | 6b | Ask again when a message with a date or time "isn't understood" | Done |
 | 7 | The dashed "not saved" card | Done |
+| 8b | Notes, and editing a card in the New reminder form | Built, waiting for your review |
 | 9 | Tidy up, and the deploy notes | Before launch |
 | 8 | Drag motion and the phone grip | After launch |
 | 10 | The Chrome extension that breaks drag and Ask | After launch |
@@ -199,6 +200,48 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 ---
 
 ## Next
+
+### Step 8b: notes, and editing a card in the New reminder form
+**Why.** Reminders already have a `description` in the data, the API (POST and PATCH, up to 2,000 characters) and the agent (`createReminderInput.description`). But the form can't set it, and the week never shows it. Editing a card needs the same form, so both go in one step.
+
+**Already there.**
+- The bar's preview card shows the note under the date and time (`Details` in `conversation.tsx`). Only a test is added.
+- The AI can already add a note through `description`, which `planCreate` saves. `lib/agent-actions.ts` doesn't change: line 38 stays as it is.
+
+**What.**
+- **Note field.** An optional multi-line "Note" after Category in the form, sent as `description`.
+- **Cards.**
+  - In the phone's day list, a one-line note under the time, cut off with "…".
+  - In the grid, where a card is 44px tall, a small note icon after the time instead. Hovering the icon shows the note.
+  - The card's name ends with ", note: <full note>".
+- **Edit a card.**
+  - A click, or Enter on a focused card, opens it in the same form. The form is filled in with title, date, time, category and note, and its button reads "Save changes".
+  - Space alone picks a card up. While one is picked up, Enter still drops it.
+  - A drag still moves the card: UI SDK swallows the click after a drag.
+  - Sent, failed and still-saving cards don't open.
+  - The saved category counts as already picked, so editing the title never re-guesses it: "Buy milk" saved as food stays food.
+  - Save changes sends a PATCH. The card updates in place or moves to its new day, and gets the accent ring. The status line says "Changed X, now …". No flight.
+  - Esc closes the bar, and focus goes back to the card.
+
+**Tests**, browser only, with fakes:
+- the note in the form's request;
+- the card's line on a phone, its icon and the icon's hover text in the grid, and the note in the card's name;
+- the agent card's note;
+- a click opens the card filled in, and Save changes sends a PATCH;
+- Enter opens a card, and Space still picks it up;
+- a drag moves a card without opening it;
+- a sent card doesn't open;
+- the category stays when the title is edited.
+
+**Breaks, each caught.**
+1. Enter picks the card up instead of opening it: the Enter test.
+2. Opening on pointer up, so the form opens after a drag: the drag test.
+3. The note left out of the request: the note test, and the edit test.
+
+**As built.**
+- The note is UI SDK's `Textarea` with `autoResize`. Enter in it starts a new line; Enter in the title still saves.
+- An edit sends the time only when it changed: the server turns down any time that has passed, even an unchanged one.
+- Tests are in `e2e/notes.spec.ts` (9). The form's Tab test now passes through Note. `fakeMove` records every field a PATCH sends.
 
 ### Step 9: tidy up, before launch (Thursday 26 November)
 - **Leftovers.**

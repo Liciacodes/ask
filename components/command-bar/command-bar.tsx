@@ -1,7 +1,7 @@
 "use client"
 
 import { createParts } from "@ui-sdk/react/primitive"
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react"
 import type { ReminderJson } from "@/lib/reminders"
 import { commands, type Command } from "./commands"
 import { Conversation, wording } from "./conversation"
@@ -76,9 +76,15 @@ type CommandBarProps = {
   onOpenChange?: (open: boolean) => void
   // Where the week shows the waiting card, for the hint line, like "the dashed card on Friday shows where it will go".
   dashedHint?: string
+  // A reminder opened from the week and saved with "Save changes".
+  onReminderChanged?: (reminder: ReminderJson) => void
+  // `edit(reminder)` opens the bar straight to the form, filled in with that reminder.
+  ref?: Ref<CommandBarHandle>
   children?: ReactNode
   className?: string
 }
+
+type CommandBarHandle = { edit: (reminder: ReminderJson) => void }
 
 const ignore = () => {}
 
@@ -89,6 +95,8 @@ function CommandBar({
   onProposal = ignore,
   onOpenChange = ignore,
   dashedHint,
+  onReminderChanged = ignore,
+  ref,
   children,
   className,
 }: CommandBarProps) {
@@ -96,6 +104,15 @@ function CommandBar({
   const [view, setView] = useState<View>("list")
   const [open, setOpen] = useState(false)
   const agent = useAgent(onAgentDone)
+  // The reminder the form is editing, if it was opened from the week. The ref is read as the bar opens.
+  const [editing, setEditing] = useState<ReminderJson | null>(null)
+  const toEdit = useRef<ReminderJson | null>(null)
+  useImperativeHandle(ref, () => ({
+    edit: (reminder) => {
+      toEdit.current = reminder
+      bar.setOpen(true, { reason: "imperative" })
+    },
+  }))
 
   // Only a card you can see counts: with the bar closed, or back at the list, the week shows nothing.
   // A new object each render: whoever listens keeps the one they have while its id stays the same.
@@ -146,11 +163,15 @@ function CommandBar({
         if (open) {
           delete root.current?.dataset.closing
           agent.reset()
-          jumpTo("list")
+          // Opened from a card in the week: straight to the form, filled in.
+          setEditing(toEdit.current)
+          jumpTo(toEdit.current ? "reminder" : "list")
+          toEdit.current = null
           setOpen(true)
           return
         }
-        if (view === "reminder" && details.reason === "escape-key") {
+        // Esc on a reminder opened from the week closes the bar, back to its card.
+        if (view === "reminder" && details.reason === "escape-key" && !editing) {
           details.cancel()
           swapTo("list")
           return
@@ -245,13 +266,16 @@ function CommandBar({
             <>
               <div className={fieldRow}>
                 <BellIcon className="size-4.5 shrink-0 text-accent" />
-                <p className="text-[16px] font-bold">New reminder</p>
+                <p className="text-[16px] font-bold">{editing ? "Edit reminder" : "New reminder"}</p>
               </div>
               <ReminderForm
+                key={editing?.id ?? "new"}
+                editing={editing ?? undefined}
                 onSaved={(reminder) => {
                   const from = paper.current!.getBoundingClientRect()
                   if (root.current) root.current.dataset.closing = "saved"
-                  onReminderSaved?.(reminder, from)
+                  if (editing) onReminderChanged(reminder)
+                  else onReminderSaved?.(reminder, from)
                   bar.close()
                 }}
               />
@@ -281,4 +305,4 @@ function CommandBar({
 const CommandBarShortcut = parts.Shortcut
 const CommandBarTrigger = parts.Trigger
 
-export { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap }
+export { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap, type CommandBarHandle }

@@ -22,7 +22,7 @@ async function fakeWeek(page: Page, reminders: ReminderJson[] = []) {
   await page.route("**/api/week?*", (route) => route.fulfill({ json: { timezone: "Africa/Lagos", reminders } }))
 }
 
-type Sent = { title: string; due_at: string; timezone: string; category: Category }
+type Sent = { title: string; description: string; due_at: string; timezone: string; category: Category }
 
 // Answers POST /api/reminders in the browser, so no test writes to a database.
 async function fakeSave(page: Page, answer: (route: Route, sent: Sent) => Promise<void> = saved) {
@@ -35,18 +35,21 @@ async function fakeSave(page: Page, answer: (route: Route, sent: Sent) => Promis
   return requests
 }
 
-type Move = { id: string; due_at: string }
+// What a PATCH sends: a drag sends the time; the form sends what it shows, and the time only when it changed.
+type Move = { id: string; due_at?: string; title?: string; description?: string; timezone?: string; category?: Category }
 
-// Answers PATCH /api/reminders/:id in the browser, by default with the week's reminder at its new time.
+// Answers PATCH /api/reminders/:id in the browser, by default with the week's reminder changed as asked.
 async function fakeMove(page: Page, week: ReminderJson[], answer?: (route: Route, sent: Move) => Promise<void>) {
   const requests: Move[] = []
   await page.route("**/api/reminders/*", async (route) => {
     if (route.request().method() !== "PATCH") return route.fallback()
-    const sent = { id: route.request().url().split("/").pop()!, ...(route.request().postDataJSON() as { due_at: string }) }
+    const sent = { id: route.request().url().split("/").pop()!, ...(route.request().postDataJSON() as Omit<Move, "id">) }
     requests.push(sent)
     if (answer) return answer(route, sent)
     const was = week.find((reminder) => reminder.id === sent.id)!
-    await route.fulfill({ json: { ...was, due_at: sent.due_at } })
+    const changes: Partial<Move> = { ...sent }
+    delete changes.id
+    await route.fulfill({ json: { ...was, ...changes, description: changes.description === undefined ? was.description : changes.description || null } })
   })
   return requests
 }
@@ -54,7 +57,12 @@ async function fakeMove(page: Page, week: ReminderJson[], answer?: (route: Route
 const saved = (route: Route, sent: Sent) =>
   route.fulfill({
     status: 201,
-    json: reminder(sent.title, sent.due_at, { timezone: sent.timezone, category: sent.category, created_at: "2026-11-18T09:20:00.000Z" }),
+    json: reminder(sent.title, sent.due_at, {
+      description: sent.description || null,
+      timezone: sent.timezone,
+      category: sent.category,
+      created_at: "2026-11-18T09:20:00.000Z",
+    }),
   })
 
 async function goHome(page: Page, week: ReminderJson[] | "already faked" = []) {
