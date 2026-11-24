@@ -192,6 +192,10 @@ test("cancelling takes the card out of the week", async ({ page }) => {
   await ask(page, "cancel the dentist")
 
   await expect(card(page, "Cancel reminder").getByRole("button", { name: "Keep it" })).toBeVisible()
+  // Red, with white words that reach 4.5:1.
+  const confirm = card(page, "Cancel reminder").getByRole("button", { name: "Cancel reminder" })
+  await expect(confirm).toHaveCSS("background-color", "rgb(220, 38, 38)")
+  await expect(confirm).toHaveCSS("color", "rgb(255, 255, 255)")
   await page.keyboard.press("Enter")
 
   await expect(card(page, "Cancel reminder")).toContainText("Cancelled")

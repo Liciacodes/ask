@@ -140,7 +140,13 @@ function PreviewCard({ part, preview, refusal, active, onAnswer }: PreviewCardPr
   // A work card is the accent itself, so its buttons swap shades to stand out from it.
   const onAccent = category === "work"
   const decline = onAccent ? "border border-work-ink text-work-ink focus-visible:outline-work-ink" : "bg-surface text-ink focus-visible:outline-accent"
-  const approve = onAccent ? "bg-surface text-accent focus-visible:outline-work-ink" : "bg-accent-fill px-5 text-on-accent focus-visible:outline-accent"
+  // Cancelling is red on every card.
+  const approve =
+    preview.action === "cancel"
+      ? `bg-danger px-5 text-on-danger ${onAccent ? "focus-visible:outline-work-ink" : "focus-visible:outline-accent"}`
+      : onAccent
+        ? "bg-surface text-accent focus-visible:outline-work-ink"
+        : "bg-accent-fill px-5 text-on-accent focus-visible:outline-accent"
 
   return (
     <section aria-label={words.heading} data-status={status} data-category={category} className="data-[status=declined]:opacity-60">

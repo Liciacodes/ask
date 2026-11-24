@@ -242,6 +242,8 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 - The note is UI SDK's `Textarea` with `autoResize`. Enter in it starts a new line; Enter in the title still saves.
 - An edit sends the time only when it changed: the server turns down any time that has passed, even an unchanged one.
 - Tests are in `e2e/notes.spec.ts` (9). The form's Tab test now passes through Note. `fakeMove` records every field a PATCH sends.
+- **Red buttons.** The bar's "Cancel reminder" button and the edit form's "Delete reminder" button are red with white words. The red is #DC2626 (`--danger`), not #E5484D: white on #E5484D is 3.91:1, and white on #DC2626 is 4.83:1.
+- **Delete reminder** shows only when editing. The first press asks "Delete for good?" and the second deletes (`DELETE /api/reminders/:id`). The bar closes, the card leaves the week, and the status line says "Deleted: …". Tests: the button's colours, asking once, the delete, no button on a new reminder, and contrast in light and dark.
 
 ### Step 9: tidy up, before launch (Thursday 26 November)
 - **Leftovers.**

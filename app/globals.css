@@ -16,6 +16,9 @@
   --accent: #5145e5;
   --accent-fill: #5145e5;
   --on-accent: #ffffff;
+  /* Buttons that cancel or delete, the same in dark: deeper than the now line's red, so white words reach 4.5:1 (4.83). */
+  --danger: #dc2626;
+  --on-danger: #ffffff;
   --now: #e5484d;
   --error: #c2283a;
   --selected: #f1efff;
@@ -126,6 +129,8 @@
   --color-accent: var(--accent);
   --color-accent-fill: var(--accent-fill);
   --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
   --color-now: var(--now);
   --color-error: var(--error);
   --color-selected: var(--selected);

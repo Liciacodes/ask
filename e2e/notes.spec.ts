@@ -136,6 +136,37 @@ test("a sent reminder doesn't open", async ({ page }) => {
   await expect(bar(page)).toHaveCount(0)
 })
 
+test("Delete reminder asks once, then deletes for good: the bar closes and the status line says so", async ({ page }) => {
+  const deletes: string[] = []
+  await page.route("**/api/reminders/*", async (route) => {
+    if (route.request().method() !== "DELETE") return route.fallback()
+    deletes.push(route.request().url().split("/").pop()!)
+    await route.fulfill({ status: 204 })
+  })
+  await goHome(page, [dentist])
+  await dentistCard(page).click()
+  const remove = bar(page).getByRole("button", { name: "Delete reminder" })
+  await expect(remove).toHaveCSS("background-color", "rgb(220, 38, 38)")
+  await expect(remove).toHaveCSS("color", "rgb(255, 255, 255)")
+
+  await remove.click()
+  await expect(bar(page).getByRole("button", { name: "Delete for good?" })).toBeVisible()
+  expect(deletes).toEqual([])
+  await bar(page).getByRole("button", { name: "Delete for good?" }).click()
+
+  await expect(status(page)).toHaveText("Deleted: Dentist")
+  await expect(bar(page)).toHaveCount(0)
+  await expect(thursday(page).getByRole("option")).toHaveCount(0)
+  expect(deletes).toEqual([dentist.id])
+})
+
+test("a new reminder has no Delete button", async ({ page }) => {
+  await goHome(page)
+  await openForm(page)
+
+  await expect(bar(page).getByRole("button", { name: "Delete reminder" })).toHaveCount(0)
+})
+
 test("a saved category counts as picked: editing the title never guesses it again", async ({ page }) => {
   const milk = reminder("Buy milk", "2026-11-19T08:00:00.000Z", { category: "food" })
   const requests = await fakeMove(page, [milk])

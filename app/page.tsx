@@ -19,6 +19,7 @@ type Outcome =
   | { agent: Done }
   | { moved: ReminderJson }
   | { notMoved: { title: string; reason: string } }
+  | { deleted: ReminderJson }
   | null;
 
 const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
@@ -139,6 +140,10 @@ export default function Home() {
           put(reminder, shows);
           if (shows) setNewest(reminder.id);
         }}
+        onReminderDeleted={(reminder) => {
+          setOutcome({ deleted: reminder });
+          put(reminder, false);
+        }}
         ref={commandBar}
         onProposal={propose}
         onOpenChange={setBarOpen}
@@ -179,6 +184,11 @@ export default function Home() {
               {outcome && "moved" in outcome && (
                 <>
                   Moved <span className={marked}>{outcome.moved.title}</span> to {whenOf(outcome.moved)}
+                </>
+              )}
+              {outcome && "deleted" in outcome && (
+                <>
+                  Deleted: <span className={marked}>{outcome.deleted.title}</span>
                 </>
               )}
               {outcome && "notMoved" in outcome && (

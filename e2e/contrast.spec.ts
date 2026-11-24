@@ -214,6 +214,14 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expectReadable(page, "[data-dashed], [data-dashed-swatches]")
     })
 
+    test("a reminder opened to edit, with its red Delete reminder button", async ({ page }) => {
+      await goHome(page, [reminder("Dentist", "2026-11-19T08:00:00.000Z", { description: "Bring the forms" })])
+      await page.getByRole("option", { name: /^Dentist/ }).click()
+
+      await expect(bar(page).getByRole("button", { name: "Delete reminder" })).toBeVisible()
+      await expectReadable(page)
+    })
+
     test("the week when it can't load", async ({ page }) => {
       await page.route("**/api/week?*", (route) => route.fulfill({ status: 500, json: { error: "Database unavailable" } }))
       await goHome(page, "already faked")

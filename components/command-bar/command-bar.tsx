@@ -78,6 +78,8 @@ type CommandBarProps = {
   dashedHint?: string
   // A reminder opened from the week and saved with "Save changes".
   onReminderChanged?: (reminder: ReminderJson) => void
+  // ...or deleted for good from the same form.
+  onReminderDeleted?: (reminder: ReminderJson) => void
   // `edit(reminder)` opens the bar straight to the form, filled in with that reminder.
   ref?: Ref<CommandBarHandle>
   children?: ReactNode
@@ -96,6 +98,7 @@ function CommandBar({
   onOpenChange = ignore,
   dashedHint,
   onReminderChanged = ignore,
+  onReminderDeleted = ignore,
   ref,
   children,
   className,
@@ -276,6 +279,11 @@ function CommandBar({
                   if (root.current) root.current.dataset.closing = "saved"
                   if (editing) onReminderChanged(reminder)
                   else onReminderSaved?.(reminder, from)
+                  bar.close()
+                }}
+                onDeleted={(reminder) => {
+                  if (root.current) root.current.dataset.closing = "saved"
+                  onReminderDeleted(reminder)
                   bar.close()
                 }}
               />

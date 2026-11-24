@@ -47,9 +47,12 @@ const line = "flex h-10 w-full items-center border-b-[1.5px] border-line text-[1
 const error = "mt-1.5 text-[13px] font-semibold text-error"
 
 // A new reminder, or with `editing`, one from the week, filled in and saved with "Save changes".
-type ReminderFormProps = { editing?: ReminderJson; onSaved: (reminder: ReminderJson) => void }
+// `onDeleted` follows "Delete reminder", which only an edit has.
+type ReminderFormProps = { editing?: ReminderJson; onSaved: (reminder: ReminderJson) => void; onDeleted?: (reminder: ReminderJson) => void }
 
-function ReminderForm({ editing, onSaved }: ReminderFormProps) {
+function ReminderForm({ editing, onSaved, onDeleted }: ReminderFormProps) {
+  // Delete asks once, "Delete for good?", and a second press deletes. It can't be undone.
+  const [confirming, setConfirming] = useState(false)
   // A reminder being edited starts at its own date and time, on this browser's clock, like the form saves it.
   const [defaults] = useState(() => (editing ? localDateTime(new Date(editing.due_at), browserZone()) : nextFullHour()))
   // The browser's language, not the page's: it orders the date and picks the clock people are used to.
@@ -63,6 +66,24 @@ function ReminderForm({ editing, onSaved }: ReminderFormProps) {
   const inFlight = useRef(false)
 
   const clear = (key: keyof Problems) => setProblems((current) => (current[key] ? { ...current, [key]: undefined } : current))
+
+  async function remove() {
+    if (!editing || inFlight.current) return
+    if (!confirming) return setConfirming(true)
+    inFlight.current = true
+    setSaving(true)
+    setProblems({})
+    try {
+      const response = await fetch(`/api/reminders/${encodeURIComponent(editing.id)}`, { method: "DELETE" })
+      if (response.ok) return onDeleted?.(editing)
+      setProblems({ form: "Ask couldn't delete this reminder. Try again." })
+    } catch {
+      setProblems({ form: "Ask couldn't reach the server. Check your connection and try again." })
+    } finally {
+      inFlight.current = false
+      setSaving(false)
+    }
+  }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -209,6 +230,17 @@ function ReminderForm({ editing, onSaved }: ReminderFormProps) {
           <p role="alert" data-problem="" className="mr-auto text-[13px] font-semibold text-error">
             {problems.form}
           </p>
+        )}
+        {editing && (
+          <Button
+            type="button"
+            onClick={remove}
+            disabled={saving}
+            focusableWhenDisabled
+            className="min-h-11 rounded-full bg-danger px-5 text-[14px] font-bold text-on-danger outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent data-disabled:opacity-70"
+          >
+            {confirming ? "Delete for good?" : "Delete reminder"}
+          </Button>
         )}
         <Button
           type="submit"
