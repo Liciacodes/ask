@@ -5,7 +5,8 @@ import { countedModel, isNewQuestion, takeQuestion } from "@/lib/agent/limits"
 import { agentModel } from "@/lib/agent/model"
 import { check } from "@/lib/api"
 import { weekQuery } from "@/lib/reminders"
-import { noVisitor, visitorFrom } from "@/lib/visitor"
+import { ownerFrom } from "@/lib/session"
+import { noVisitor } from "@/lib/visitor"
 
 const MAX_BODY = 100_000
 
@@ -16,8 +17,8 @@ const body = z.strictObject({
 })
 
 export async function POST(request: Request) {
-  const visitor = visitorFrom(request)
-  if (!visitor) return noVisitor()
+  const owner = await ownerFrom(request)
+  if (!owner) return noVisitor()
 
   const text = await request.text()
   if (text.length > MAX_BODY) return Response.json({ error: "The conversation is too long to send" }, { status: 413 })
@@ -40,13 +41,13 @@ export async function POST(request: Request) {
   const model = countedModel(agentModel())
 
   // A new question is turned away here, before any model call, once today's limits are reached.
-  const question = isNewQuestion(messages.data) ? await takeQuestion(visitor, zone.data.timezone) : undefined
+  const question = isNewQuestion(messages.data) ? await takeQuestion(owner, zone.data.timezone) : undefined
   if (question && !question.ok) return question.response
 
   const stream = agentStream({
     model,
     messages: messages.data,
-    userId: visitor,
+    userId: owner,
     timezone: zone.data.timezone,
     now: new Date(),
     onNoRoom: question?.giveBack,

@@ -65,6 +65,13 @@ const saved = (route: Route, sent: Sent) =>
     }),
   })
 
+type Me = { name: string | null; email: string; picture: string | null } | null
+
+// Answers GET /api/auth/me in the browser: who the header says is signed in. `me` may change as the test goes on.
+async function fakeMe(page: Page, me: () => Me) {
+  await page.route("**/api/auth/me", (route) => route.fulfill({ json: { user: me() } }))
+}
+
 async function goHome(page: Page, week: ReminderJson[] | "already faked" = []) {
   // No browser test reaches the real /api/agent. A test's own fake (e2e/fake-agent.ts) is a page route, and page
   // routes always win over this context route.
@@ -121,6 +128,7 @@ async function expectHighlighted(page: Page, option: Locator) {
 
 export {
   addTextField,
+  fakeMe,
   askButton,
   bar,
   command,

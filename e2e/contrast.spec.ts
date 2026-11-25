@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 import { CATEGORIES } from "@/lib/categories"
 import { fakeAgent, proposes, says, turn } from "./fake-agent"
-import { bar, fakeSave, goHome, openBar, openForm, reminder, status, title } from "./helpers"
+import { bar, fakeMe, fakeSave, goHome, openBar, openForm, reminder, status, title } from "./helpers"
 
 // Every word on the main screens, light and dark, reads at 4.5:1 against what's behind it (3:1 for large text, and
 // for icons), measured from the colours the browser paints.
@@ -150,6 +150,20 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expect(status(page)).toContainText("Saved Buy milk")
       await addCategorySwatches(page, CATEGORIES)
 
+      await expectReadable(page)
+    })
+
+    test("the header signed in, and a guest's Sign in link after a sign-in that failed", async ({ page }) => {
+      await fakeMe(page, () => ({ name: "Ada Lovelace", email: "ada@example.com", picture: null }))
+      await goHome(page)
+      await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible()
+      await expectReadable(page)
+
+      await page.unroute("**/api/auth/me")
+      await fakeMe(page, () => null)
+      await page.goto("/?signin=failed")
+      await expect(page.getByText("Couldn't sign in with Google. Try again.")).toBeVisible()
+      await expect(page.getByRole("link", { name: "Sign in with Google" })).toBeVisible()
       await expectReadable(page)
     })
 

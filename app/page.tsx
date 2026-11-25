@@ -2,6 +2,7 @@
 
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
+import { Account } from "@/components/account";
 import { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap, type CommandBarHandle } from "@/components/command-bar/command-bar";
 import { CalendarIcon, SparkleIcon } from "@/components/command-bar/icons";
 import type { Command } from "@/components/command-bar/commands";
@@ -157,11 +158,14 @@ export default function Home() {
             </span>
             {week && <h1 className="text-[26px] leading-tight font-extrabold tracking-[-0.02em]">{week.title}</h1>}
           </div>
-          <CommandBarTrigger className="flex min-h-11 items-center gap-2.5 rounded-full bg-accent-fill py-1 pr-2 pl-4 text-[14px] font-bold text-on-accent outline-offset-2 transition-transform duration-160 ease-out focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100">
-            <SparkleIcon className="size-4" />
-            Ask anything
-            <CommandBarShortcut className="min-w-11 rounded-full bg-white/10 px-2.5 py-1 text-center font-sans text-[12px] font-bold" />
-          </CommandBarTrigger>
+          <div className="flex flex-wrap items-center gap-3">
+            <CommandBarTrigger className="flex min-h-11 items-center gap-2.5 rounded-full bg-accent-fill py-1 pr-2 pl-4 text-[14px] font-bold text-on-accent outline-offset-2 transition-transform duration-160 ease-out focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100">
+              <SparkleIcon className="size-4" />
+              Ask anything
+              <CommandBarShortcut className="min-w-11 rounded-full bg-white/10 px-2.5 py-1 text-center font-sans text-[12px] font-bold" />
+            </CommandBarTrigger>
+            <Account />
+          </div>
         </header>
         <section aria-labelledby="week-title" className="mt-5 flex flex-1 flex-col">
           {/* The month title and each day's date say which week it is; this names it for screen readers. */}
