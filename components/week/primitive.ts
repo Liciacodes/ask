@@ -91,9 +91,15 @@ const weekBoard = definePrimitive({
       // Tab puts a picked-up card back and moves on. Putting it back re-mounts the card in its own day, and if that
       // happens while it still has focus, roving focus pulls focus back to it once Tab has left the page. So let Tab
       // move focus first, then put the card back.
+      // The arrow key that moved the card also left focus repairs waiting on a timer. They act when focus is on
+      // <body>, which is where Tab out of the page leaves it, so one can pull focus back onto the card after Tab.
+      // They were queued before this timer, so they've all run by now: if the card has focus again, Tab meant to
+      // leave it, and it lets go before going back.
       if (moving && event.key === "Tab") {
         setTimeout(() => {
-          if (context.store.get().moving === moving) transfer.keydown(event, key)
+          if (context.store.get().moving !== moving) return
+          if (el.ownerDocument.activeElement === el) el.blur()
+          transfer.keydown(event, key)
         })
         return
       }
