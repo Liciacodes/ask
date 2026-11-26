@@ -22,9 +22,11 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 | 6b | Ask again when a message with a date or time "isn't understood" | Done |
 | 7 | The dashed "not saved" card | Done |
 | 8b | Notes, and editing a card in the New reminder form | Built, waiting for your review |
+| – | The calm restyle, with Step 9's tidy-ups | Built, in your review |
 | 9 | Tidy up, and the deploy notes | Before launch |
 | 8 | Drag motion and the phone grip | After launch |
 | 10 | The Chrome extension that breaks drag and Ask | After launch |
+| 11 | The weather question says what the reminder is for | After launch |
 
 ## Ground rules
 
@@ -50,7 +52,7 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 - **No server override for "other".** The category description in `lib/agent-actions.ts` gives the model examples instead.
 - **The bar's buttons keep their wording.** "Don't save" stays, so it can't be confused with cancelling a reminder.
 - **"Order a cake" may be food or shopping**, like "Pay rent", which may be other or shopping.
-- **An off-topic message with a date or time may get a question offering a reminder** after the retry, like "What time tomorrow would you like to be reminded to check the weather?" It's friendly, and Ask is a reminder app. The retry's wording stays as it is.
+- **An off-topic message with a date or time may get a question offering a reminder** after the retry, like "What time tomorrow would you like to be reminded to check the weather?" It's friendly, and Ask is a reminder app. Since the calm restyle (26 November), the retry also tells the model that a question back must say what the reminder would be for, and the live check requires the weather question to name the weather.
 
 ---
 
@@ -146,7 +148,7 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 - "Book a table for dinner Friday at 7pm": the right card in 3 of 3, each on the first call.
 - "what's the weather tomorrow?": off-topic, then asked again, in 2 of 2. The second answer was a question both times: "What time tomorrow would you like to be reminded to check the weather?" No card, and no "didn't understand" examples.
 
-**Your decision on the weather question.** The retry's wording stays. A question offering a reminder is fine: it's friendly, and Ask is a reminder app. The test sentence is marked `orOffersReminder`. Its live test accepts either "didn't understand" or a question that mentions a reminder, as long as no card is proposed. The API test still sends the "didn't understand" answer twice. This wasn't checked live again.
+**Your decision on the weather question.** The retry's wording stays. A question offering a reminder is fine: it's friendly, and Ask is a reminder app. The test sentence is marked `orOffersReminder`. Its live test accepts either "didn't understand" or a question that mentions a reminder, as long as no card is proposed. The API test still sends the "didn't understand" answer twice. This wasn't checked live again. (Changed on 26 November: the retry now asks a question back to say what the reminder is for. See the calm restyle.)
 
 ### Step 7: the dashed "not saved" card
 - **When it shows.** While a create or change card waits for your OK, and while it saves after your yes, the week shows a white card with a 2px dashed border and words in the category's ink, at its date and time, reading "18:00 · not saved" in your clock's format.
@@ -245,10 +247,18 @@ Work happens on the `redesign` branch, one small step at a time, each reviewed b
 - **Red buttons.** The bar's "Cancel reminder" button and the edit form's "Delete reminder" button are red with white words. The red is #DC2626 (`--danger`), not #E5484D: white on #E5484D is 3.91:1, and white on #DC2626 is 4.83:1.
 - **Delete reminder** shows only when editing. The first press asks "Delete for good?" and the second deletes (`DELETE /api/reminders/:id`). The bar closes, the card leaves the week, and the status line says "Deleted: …". Tests: the button's colours, asking once, the delete, no button on a new reminder, and contrast in light and dark.
 
+### The calm restyle (branch `calm-restyle`, from `google-login`, 26 November)
+The look of `docs/design/calm-week.html`, with no new features: every behaviour, wording and test stays.
+- **Look.** A grey page, a white board with 32px corners, near-black ink and dark buttons, and Figtree. The calendar tile shows today's month on red and today's date. Cards are white with a border, a dot before the title, a clock and the time, Sent and Not sent pills, and the category icon in grey. The dashed card has a "Not saved" pill. The hours are 54px, as in the design, with 48px cards.
+- **Pills on narrow cards.** In the design, "10:00 AM" and a pill don't fit beside the icon in a 1280px week's cards. So a pill follows the time only where its card has room (a phone's day list). On a grid card it sits on the card's bottom edge, ringed in white, so it's never cut off.
+- **Dark mode.** My own: near-black page, dark grey board, light ink; dark buttons and today's circle turn light.
+- **A racy test, fixed.** `e2e/reminder-form.spec.ts` looked for a field error's words on the whole page. UI SDK also writes them into a hidden live region 100ms later and leaves them there, so a slow check found them twice and failed (once, in the restyle's second full run). Both field error checks now look inside the bar; 5 repeats of the file passed.
+- **Live check, 26 November: 6 calls, as agreed.** "what's the weather tomorrow?" 3 times. All three were asked again, and each became a question with no card. Two named the weather ("What time tomorrow would you like to be reminded to check the weather?"). One didn't ("What time tomorrow should I set the reminder for?"), and the tightened check failed it.
+- **Step 9 tidy-ups.** The highlighter is gone (see Step 9); the retry asks a question back to say what the reminder is for; the browser tests build into `.next-e2e` and run on the test database, in CI too.
+
 ### Step 9: tidy up, before launch (Thursday 26 November)
 - **Leftovers.**
-  - Remove what the old Index card look left behind, like `--veil`, which is unused since step 6.
-  - The week's cards lost their highlighter in step 7. The highlighter stays on the status line, on the bar's card title, the chosen row in the bar, and the form's date and time fields, so `--marker` and the `highlighter` utility stay.
+  - Done in the calm restyle (26 November): `--veil` is gone, and so is the highlighter, everywhere. The status line's title is semibold, the chosen row in the bar has only its grey tint, the bar card's title is plain, and the focused part of a date or time gets a soft grey fill. `--marker`, `--work-marker` and the `highlighter` utility are removed.
 - **CLAUDE.md.** Update the week notes for the grid, lanes and phone list, the dashed card, and the newest card's ring.
 - **Deploy notes.** Main needs `prisma migrate deploy`, run by you, before the code that reads `category` is deployed.
 - **Final checks.**
@@ -288,6 +298,13 @@ Both work in an Incognito window, where extensions are off, so one of your exten
   - one that wraps `fetch`, so the reply's stream never reaches the bar as it arrives.
 - **Decide whether Ask can guard against it.** For example, a timeout that turns a reply with no news into the "Ask couldn't get an answer" message instead of "Thinking…" forever. Or a note in the bar when a drag is cancelled by something outside Ask. Other visitors will have the same extension.
 
+### Step 11: the weather question says what the reminder is for
+**Where it stands (26 November).** The retry tells the model that a question back must say what the reminder would be for. The live check requires the weather question to name the weather.
+- "what's the weather tomorrow?" passed 2 of 3 live runs: "What time tomorrow would you like to be reminded to check the weather?"
+- The third asked for the time without saying what the reminder is for: "What time tomorrow should I set the reminder for?"
+
+**Your decision.** The wording stays as it is for launch, with no more live calls on it until then. We'll look at it after launch.
+
 ---
 
 ## Flaky tests to watch
@@ -313,6 +330,7 @@ All runs use the test database. Calls were capped once `ASK_LIVE_CALLS` existed.
 | "book flights" ×3, and 5 sentences with words outside the description | 8 | Flights off-topic in 2 of 3; 4 of 5 right ("Reply to Ada's email" came back as work) |
 | "book flights" ×3, and 5 task and message sentences, after the instruction line | 8 | Flights off-topic in 1 of 3; 4 of 5 right ("Book a table…" went off-topic) |
 | Step 6b: "book flights" ×3, "Book a table…" ×3, "what's the weather tomorrow?" ×2, cap 16 | 11 | All 6 cards right. Flights was off-topic once, asked again, then its card. The weather was asked again both times and became a question, "What time tomorrow would you like to be reminded to check the weather?", not a card |
+| Calm restyle: "what's the weather tomorrow?" ×3, cap 2 a run | 6 | Asked again every time, and a question each time, never a card. 2 of 3 named the weather; the third, "What time tomorrow should I set the reminder for?", didn't, and failed the check (see step 11) |
 
 Tokens per call are now about 1,435 in and up to about 300 out. All 42 test sentences take about 63 calls since step 6b ("what's the weather tomorrow?" is asked again), about half of Groq's free day, which the live site shares.
 

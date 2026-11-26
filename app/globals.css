@@ -2,118 +2,106 @@
 
 @import "tailwindcss";
 
-/* Colourful week: a lavender page, white surfaces, indigo ink and accent, and a soft colour and icon for each kind
-   of reminder. Every text colour reads at 4.5:1 on the backgrounds it's used on (e2e/contrast.spec.ts). */
+/* Calm week: a grey page, a white board with soft shadows, near-black ink and buttons, and a small coloured dot for
+   each kind of reminder beside its grey icon, so colour is never the only clue. Every word reads at 4.5:1 on what's
+   behind it, light and dark (e2e/contrast.spec.ts). */
 :root {
-  --page: #f6f5ff;
+  --page: #eef0f3;
   --surface: #ffffff;
-  --today: #faf9ff;
-  --ink: #1b1a2e;
-  --muted: #6b6890;
-  --line: #e6e3fa;
-  --line-faint: #efedfb;
-  /* The accent as words, lines and focus rings; the fill is what sits behind white words. */
-  --accent: #5145e5;
-  --accent-fill: #5145e5;
-  --on-accent: #ffffff;
-  /* Buttons that cancel or delete, the same in dark: deeper than the now line's red, so white words reach 4.5:1 (4.83). */
+  /* Today's column, and the bar's preview card. */
+  --today: #f8f9fb;
+  --soft: #f5f6f8;
+  --ink: #16181d;
+  --muted: #5f646e;
+  --line: #e6e8ec;
+  --line-faint: #f1f2f5;
+  /* The dark buttons, today's date, and the words on them. Dark mode turns them light. */
+  --strong: #17181c;
+  --on-strong: #ffffff;
+  /* The shortcut's chip on the dark "Ask anything" button. */
+  --strong-key: rgb(255 255 255 / 0.14);
+  /* Focus rings and the newest card's ring. */
+  --accent: var(--strong);
+  /* The calendar tile's month. */
+  --month: #cc2e36;
+  --on-month: #ffffff;
+  /* Buttons that cancel or delete, the same in dark: white words on them reach 4.83:1. */
   --danger: #dc2626;
   --on-danger: #ffffff;
   --now: #e5484d;
-  --error: #c2283a;
-  --selected: #f1efff;
-  --marker: #e2deff;
-  --veil: rgb(27 26 46 / 0.18);
-  --bar-shadow: 0 28px 64px rgb(40 30 120 / 0.22);
-  --card-shadow: 0 1px 2px rgb(40 30 120 / 0.06), 0 4px 12px -4px rgb(40 30 120 / 0.16);
-  --board-shadow: 0 12px 32px rgb(60 50 160 / 0.08);
-  --work-shadow: 0 6px 16px rgb(81 69 229 / 0.25);
+  --error: #b42318;
+  --selected: #f1f2f5;
+  /* A dashed card's border; the "Not saved" pill says it in words. */
+  --dashed-line: #a9aeb8;
+  --unsaved: #fff4d6;
+  --unsaved-ink: #7a5a00;
+  --sent: #e3f4e9;
+  --sent-ink: #1f7a45;
+  --failed: #fdecec;
+  --failed-ink: #b42318;
+  --avatar: #e9e6fb;
+  --avatar-ink: #3a3196;
+  --bar-shadow: 0 30px 80px rgb(20 25 40 / 0.16);
+  --board-shadow: 0 24px 60px rgb(20 25 40 / 0.07);
+  --card-shadow: 0 4px 14px rgb(20 25 40 / 0.05);
+  --button-shadow: 0 4px 14px rgb(20 25 40 / 0.06);
+  --tile-shadow: 0 6px 18px rgb(20 25 40 / 0.08);
 
-  /* Each kind of reminder: its card, its words and icon, and the tile behind the icon. Call and message share cyan. */
-  --work: var(--accent-fill);
-  --work-ink: #ffffff;
-  --work-tile: rgb(255 255 255 / 0.22);
-  /* White words need a darker highlighter than the tile. */
-  --work-marker: rgb(0 0 0 / 0.22);
-  --health: #f1e0fb;
-  --health-ink: #5e2390;
-  --health-tile: #e2c4f7;
-  --call: #dff4fb;
-  --call-ink: #0a5c76;
-  --call-tile: #b9e6f5;
-  --message: #dff4fb;
-  --message-ink: #0a5c76;
-  --message-tile: #b9e6f5;
-  --food: #ffefc7;
-  --food-ink: #734600;
-  --food-tile: #ffe09a;
-  --travel: #ffe1da;
-  --travel-ink: #962d12;
-  --travel-tile: #ffc8ba;
-  --exercise: #d9f3e6;
-  --exercise-ink: #0e6640;
-  --exercise-tile: #b6e8cf;
-  --shopping: #fce4f1;
-  --shopping-ink: #97174c;
-  --shopping-tile: #f8c9e2;
-  --hobby: #dde6ff;
-  --hobby-ink: #2a47ae;
-  --hobby-tile: #c4d3ff;
-  --other: #eceaf6;
-  --other-ink: #45426a;
-  --other-tile: #dcd9ee;
+  /* Each kind of reminder's dot. Call and message share cyan, so their icons tell them apart. */
+  --work: #4f5bd5;
+  --health: #9b6be3;
+  --call: #2ba6c9;
+  --message: #2ba6c9;
+  --food: #f2a93b;
+  --travel: #f07c4f;
+  --exercise: #34b27b;
+  --shopping: #e25c8a;
+  --hobby: #5b8def;
+  --other: #8a8f99;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --page: #13121d;
-    --surface: #1c1b2a;
-    --today: #211f33;
-    --ink: #eeedfb;
-    --muted: #a9a6c9;
-    --line: #312f48;
-    --line-faint: #262439;
-    --accent: #aba5ff;
-    --accent-fill: #5b50e8;
-    --on-accent: #ffffff;
-    --now: #ff6369;
+    --page: #0e0f12;
+    --surface: #18191d;
+    --today: #1c1d22;
+    --soft: #212329;
+    --ink: #ecedf0;
+    --muted: #a3a8b2;
+    --line: #2b2e35;
+    --line-faint: #212328;
+    --strong: #ecedf0;
+    --on-strong: #16181d;
+    --strong-key: rgb(22 24 29 / 0.1);
     --error: #ff8d93;
-    --selected: rgb(150 140 255 / 0.12);
-    --marker: rgb(150 140 255 / 0.3);
-    --veil: rgb(0 0 0 / 0.5);
-    --bar-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 28px 64px rgb(0 0 0 / 0.6);
-    --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px -4px rgb(0 0 0 / 0.6);
-    --board-shadow: 0 0 0 1px rgb(255 255 255 / 0.03), 0 12px 32px rgb(0 0 0 / 0.4);
-    --work-shadow: 0 6px 16px rgb(0 0 0 / 0.45);
+    --now: #ff6369;
+    --selected: #25272d;
+    --dashed-line: #5c616c;
+    /* Opaque, as a pill can sit on a card's edge. */
+    --unsaved: #372d21;
+    --unsaved-ink: #f2c55c;
+    --sent: #1c312c;
+    --sent-ink: #7fd9a3;
+    --failed: #392125;
+    --failed-ink: #ff9b9b;
+    --avatar: #2e2a5c;
+    --avatar-ink: #d6d1ff;
+    --bar-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 30px 80px rgb(0 0 0 / 0.6);
+    --board-shadow: 0 0 0 1px rgb(255 255 255 / 0.04), 0 24px 60px rgb(0 0 0 / 0.45);
+    --card-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
+    --button-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 14px rgb(0 0 0 / 0.35);
+    --tile-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(0 0 0 / 0.4);
 
-    --work-tile: rgb(255 255 255 / 0.18);
-    --health: #34204a;
-    --health-ink: #ecd5fb;
-    --health-tile: #4a2e66;
-    --call: #0f3340;
-    --call-ink: #bfeaf8;
-    --call-tile: #18495b;
-    --message: #0f3340;
-    --message-ink: #bfeaf8;
-    --message-tile: #18495b;
-    --food: #382b0f;
-    --food-ink: #ffe2a3;
-    --food-tile: #52401a;
-    --travel: #3f211a;
-    --travel-ink: #ffcfc2;
-    --travel-tile: #5a2f25;
-    --exercise: #13352a;
-    --exercise-ink: #bdeed6;
-    --exercise-tile: #1e4c3c;
-    --shopping: #3d1a2c;
-    --shopping-ink: #fbcee6;
-    --shopping-tile: #58273f;
-    --hobby: #1e2848;
-    --hobby-ink: #d0dcff;
-    --hobby-tile: #2d3b68;
-    --other: #2a2940;
-    --other-ink: #dcdaf0;
-    --other-tile: #3b3958;
+    --work: #7c86f0;
+    --health: #b48cf0;
+    --call: #4cbedd;
+    --message: #4cbedd;
+    --food: #f5b754;
+    --travel: #f48c64;
+    --exercise: #4cc490;
+    --shopping: #ec77a0;
+    --hobby: #79a2f5;
+    --other: #9096a1;
     color-scheme: dark;
   }
 }
@@ -122,54 +110,47 @@
   --color-page: var(--page);
   --color-surface: var(--surface);
   --color-today: var(--today);
+  --color-soft: var(--soft);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
   --color-line-faint: var(--line-faint);
+  --color-strong: var(--strong);
+  --color-on-strong: var(--on-strong);
+  --color-strong-key: var(--strong-key);
   --color-accent: var(--accent);
-  --color-accent-fill: var(--accent-fill);
-  --color-on-accent: var(--on-accent);
+  --color-month: var(--month);
+  --color-on-month: var(--on-month);
   --color-danger: var(--danger);
   --color-on-danger: var(--on-danger);
   --color-now: var(--now);
   --color-error: var(--error);
   --color-selected: var(--selected);
-  --color-veil: var(--veil);
+  --color-dashed-line: var(--dashed-line);
+  --color-unsaved: var(--unsaved);
+  --color-unsaved-ink: var(--unsaved-ink);
+  --color-sent: var(--sent);
+  --color-sent-ink: var(--sent-ink);
+  --color-failed: var(--failed);
+  --color-failed-ink: var(--failed-ink);
+  --color-avatar: var(--avatar);
+  --color-avatar-ink: var(--avatar-ink);
   --color-work: var(--work);
-  --color-work-ink: var(--work-ink);
-  --color-work-tile: var(--work-tile);
   --color-health: var(--health);
-  --color-health-ink: var(--health-ink);
-  --color-health-tile: var(--health-tile);
   --color-call: var(--call);
-  --color-call-ink: var(--call-ink);
-  --color-call-tile: var(--call-tile);
   --color-message: var(--message);
-  --color-message-ink: var(--message-ink);
-  --color-message-tile: var(--message-tile);
   --color-food: var(--food);
-  --color-food-ink: var(--food-ink);
-  --color-food-tile: var(--food-tile);
   --color-travel: var(--travel);
-  --color-travel-ink: var(--travel-ink);
-  --color-travel-tile: var(--travel-tile);
   --color-exercise: var(--exercise);
-  --color-exercise-ink: var(--exercise-ink);
-  --color-exercise-tile: var(--exercise-tile);
   --color-shopping: var(--shopping);
-  --color-shopping-ink: var(--shopping-ink);
-  --color-shopping-tile: var(--shopping-tile);
   --color-hobby: var(--hobby);
-  --color-hobby-ink: var(--hobby-ink);
-  --color-hobby-tile: var(--hobby-tile);
   --color-other: var(--other);
-  --color-other-ink: var(--other-ink);
-  --color-other-tile: var(--other-tile);
   --shadow-bar: var(--bar-shadow);
-  --shadow-card: var(--card-shadow);
   --shadow-board: var(--board-shadow);
-  --shadow-work: var(--work-shadow);
-  --font-sans: var(--font-jakarta), system-ui, sans-serif;
+  --shadow-card: var(--card-shadow);
+  --shadow-button: var(--button-shadow);
+  --shadow-tile: var(--tile-shadow);
+  --font-sans: var(--font-figtree), system-ui, sans-serif;
 }
 
 /* The one motion curve: a strong ease-out. Tailwind's ease-out utility and plain CSS both read it. */
@@ -177,17 +158,12 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-/* A highlighter stroke behind the words, leaving a little paper above and below. */
-@utility highlighter {
-  background-image: linear-gradient(transparent 12%, var(--marker) 12% 88%, transparent 88%);
-}
-
-/* A faint line at the top of every hour in the time grid: 48px an hour, as in components/week/grid.ts. */
+/* A faint line at the top of every hour in the time grid: 54px an hour, as in components/week/grid.ts. */
 @utility hour-lines {
-  background-image: repeating-linear-gradient(to bottom, var(--line-faint) 0 1px, transparent 1px 48px);
+  background-image: repeating-linear-gradient(to bottom, var(--line-faint) 0 1px, transparent 1px 54px);
 }
 
-/* Each part of a date or time is a small input. The focused one gets the highlighter, underlined in the accent. */
+/* Each part of a date or time is a small input. The focused one gets a soft grey fill, underlined in ink. */
 :is([data-slot="date-input-segment"], [data-slot="time-input-segment"]) {
   &[data-type="literal"] {
     padding-inline: 1px;
@@ -215,9 +191,9 @@
       background: transparent;
     }
 
-    /* Muted words don't reach 4.5:1 on the highlighter, so an empty part's placeholder turns ink while focused. */
+    /* An empty part's placeholder turns ink while focused, so the part you're typing in stands out. */
     &:focus {
-      background: var(--marker);
+      background: var(--selected);
       box-shadow: inset 0 -2px var(--accent);
 
       &::placeholder {
@@ -310,13 +286,13 @@
   opacity: 0.45;
 }
 
-/* The newest card keeps an accent ring, a pixel clear of it so it shows on a work card too. */
+/* The newest card keeps a ring in ink, a pixel clear of its border. */
 [data-slot="week-board-card"][data-newest]::after {
   content: "";
   position: absolute;
-  inset: -3px;
+  inset: -4px;
   border: 2px solid var(--accent);
-  border-radius: 15px;
+  border-radius: 19px;
   pointer-events: none;
 }
 

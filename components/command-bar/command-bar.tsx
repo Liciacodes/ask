@@ -27,7 +27,7 @@ const parts = createParts(commandBar, {
 })
 
 const keycap =
-  "inline-grid min-w-5 place-items-center rounded-md border border-b-2 border-line bg-surface px-1.5 py-1 font-sans text-[11.5px] leading-none font-bold text-ink"
+  "inline-grid min-w-5 place-items-center rounded-lg border border-b-2 border-line bg-surface px-1.5 py-1 font-sans text-[12px] leading-none font-semibold text-ink"
 
 type Hint = readonly [keys: readonly string[], action: string]
 
@@ -218,7 +218,7 @@ function CommandBar({
           ref={paper}
           data-paper=""
           aria-hidden="true"
-          className="absolute inset-0 -z-10 origin-bottom rounded-3xl border border-line bg-surface shadow-bar max-sm:rounded-b-none max-sm:border-b-0"
+          className="absolute inset-0 -z-10 origin-bottom rounded-[30px] bg-surface shadow-bar max-sm:rounded-b-none"
         />
         <parts.Title className="sr-only">Ask</parts.Title>
         <parts.Panel ref={panel} className="relative">
@@ -226,19 +226,20 @@ function CommandBar({
           {view === "list" ? (
             <>
               <div className={fieldRow}>
-                <SparkleIcon className="size-4.5 shrink-0 text-accent" />
+                <SparkleIcon className="size-4.5 shrink-0 text-ink" />
                 <parts.Input autoFocus placeholder="Type a command or ask anything" className={fieldText} />
               </div>
+              {/* The chosen row takes a soft grey tint across its whole width. */}
               <parts.List className="flex max-h-[min(360px,50vh)] flex-col gap-0.5 overflow-y-auto px-2">
                 {commands.map(({ value, label, Icon }) => (
                   <parts.Item
                     key={value}
                     value={value}
                     label={label}
-                    className="group flex cursor-default items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold data-highlighted:bg-selected"
+                    className="group flex cursor-default items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-semibold data-highlighted:bg-selected"
                   >
                     <Icon className="shrink-0 text-muted group-data-highlighted:text-ink" />
-                    <span className="-mx-1 rounded-xs px-1 group-data-highlighted:highlighter">{label}</span>
+                    <span>{label}</span>
                     <span aria-hidden="true" className="invisible ml-auto text-[13px] text-muted group-data-highlighted:visible">
                       ↵
                     </span>
@@ -246,12 +247,12 @@ function CommandBar({
                 ))}
                 <parts.Item
                   value={ASK}
-                  className="group flex cursor-default items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold data-highlighted:bg-selected"
+                  className="group flex cursor-default items-center gap-3 rounded-2xl px-3 py-2.5 text-[15px] font-semibold data-highlighted:bg-selected"
                 >
                   {({ query }) => (
                     <>
                       <AskIcon className="shrink-0 text-muted group-data-highlighted:text-ink" />
-                      <span className="-mx-1 min-w-0 truncate rounded-xs px-1 group-data-highlighted:highlighter">Ask “{query}”</span>
+                      <span className="min-w-0 truncate">Ask “{query}”</span>
                       <span aria-hidden="true" className="invisible ml-auto text-[13px] text-muted group-data-highlighted:visible">
                         ↵
                       </span>
@@ -268,8 +269,8 @@ function CommandBar({
           ) : (
             <>
               <div className={fieldRow}>
-                <BellIcon className="size-4.5 shrink-0 text-accent" />
-                <p className="text-[16px] font-bold">{editing ? "Edit reminder" : "New reminder"}</p>
+                <BellIcon className="size-4.5 shrink-0 text-ink" />
+                <p className="text-[17px] font-semibold">{editing ? "Edit reminder" : "New reminder"}</p>
               </div>
               <ReminderForm
                 key={editing?.id ?? "new"}
@@ -290,7 +291,7 @@ function CommandBar({
             </>
           )}
           </div>
-          <div ref={footer} aria-hidden="true" className="px-5 pt-2 pb-3.5 text-[12px] font-semibold text-muted">
+          <div ref={footer} aria-hidden="true" className="px-5 pt-2 pb-3.5 text-[13px] font-medium text-muted">
             <div ref={hintRow} className="flex min-h-[22.5px] flex-wrap gap-x-5 gap-y-1.5">
               {(view === "conversation" ? conversationHints(agent, dashedHint) : hints[view]).map(([keys, action]) => (
                 <span key={action} className="inline-flex items-center gap-1.5">

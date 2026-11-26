@@ -112,11 +112,14 @@ test("while a new reminder waits for your OK, a dashed card shows its day, time 
 
   const card = day(page, "Friday 20 November").locator("[data-dashed]")
   await expect(card).toBeVisible()
-  await expect(card).toHaveText("Call Ada18:00 · not saved")
-  // At 18:00 in the grid, which starts at 8:00 with 48px an hour.
-  await expect(card).toHaveCSS("top", `${(18 - 8) * 48 + 2}px`)
+  await expect(card).toHaveText("Call Ada18:00Not saved")
+  await expect(card.getByText("Not saved", { exact: true })).toHaveCSS("background-color", await painted(page, "--unsaved"))
+  // Its category's dot, as the saved card will have.
+  await expect(card.locator(".bg-call")).toHaveCount(1)
+  // At 18:00 in the grid, which starts at 8:00 with 54px an hour.
+  await expect(card).toHaveCSS("top", `${(18 - 8) * 54 + 3}px`)
   await expect(card).toHaveCSS("border-top-style", "dashed")
-  await expect(card).toHaveCSS("border-top-color", await painted(page, "--call-ink"))
+  await expect(card).toHaveCSS("border-top-color", await painted(page, "--dashed-line"))
   await expect(card).toHaveCSS("background-color", await painted(page, "--surface"))
   await expect(footer(page)).toContainText("the dashed card on Friday shows where it will go")
 })
@@ -197,7 +200,7 @@ test("a change: the card it would move fades to half strength, the dashed card s
   await ask(page, "move the dentist to tomorrow")
 
   const original = day(page, "Wednesday 18 November").getByRole("option", { name: /^Dentist/ })
-  await expect(day(page, "Thursday 19 November").locator("[data-dashed]")).toHaveText("Dentist09:00 · not saved")
+  await expect(day(page, "Thursday 19 November").locator("[data-dashed]")).toHaveText("Dentist09:00Not saved")
   await expect(original).toHaveCSS("opacity", "0.5")
   await expect(footer(page)).toContainText("the dashed card on Thursday shows where it will go")
 

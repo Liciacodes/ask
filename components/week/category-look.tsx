@@ -1,48 +1,19 @@
 import type { SVGProps } from "react"
 import type { Category } from "@/lib/categories"
 
-// Each kind of reminder's colours, as whole class names so Tailwind finds them: its card and words, the tile behind
-// its icon, and the highlighter on the bar's card title, in a shade its words still read on.
-const categoryLook: Record<Category, { card: string; tile: string }> = {
-  work: { card: "bg-work text-work-ink shadow-work [--marker:var(--work-marker)]", tile: "bg-work-tile" },
-  health: { card: "bg-health text-health-ink [--marker:var(--health-tile)]", tile: "bg-health-tile" },
-  call: { card: "bg-call text-call-ink [--marker:var(--call-tile)]", tile: "bg-call-tile" },
-  message: { card: "bg-message text-message-ink [--marker:var(--message-tile)]", tile: "bg-message-tile" },
-  food: { card: "bg-food text-food-ink [--marker:var(--food-tile)]", tile: "bg-food-tile" },
-  travel: { card: "bg-travel text-travel-ink [--marker:var(--travel-tile)]", tile: "bg-travel-tile" },
-  exercise: { card: "bg-exercise text-exercise-ink [--marker:var(--exercise-tile)]", tile: "bg-exercise-tile" },
-  shopping: { card: "bg-shopping text-shopping-ink [--marker:var(--shopping-tile)]", tile: "bg-shopping-tile" },
-  hobby: { card: "bg-hobby text-hobby-ink [--marker:var(--hobby-tile)]", tile: "bg-hobby-tile" },
-  other: { card: "bg-other text-other-ink [--marker:var(--other-tile)]", tile: "bg-other-tile" },
-}
-
-// A card that isn't saved yet: white, with a dashed border and words in its category's ink. A work card's ink is
-// white, so on white it takes the accent, and its tile is the accent itself.
-const dashedLook: Record<Category, { card: string; tile: string }> = {
-  work: { card: "border-accent text-accent", tile: "bg-work text-work-ink" },
-  health: { card: "border-health-ink text-health-ink", tile: "bg-health-tile" },
-  call: { card: "border-call-ink text-call-ink", tile: "bg-call-tile" },
-  message: { card: "border-message-ink text-message-ink", tile: "bg-message-tile" },
-  food: { card: "border-food-ink text-food-ink", tile: "bg-food-tile" },
-  travel: { card: "border-travel-ink text-travel-ink", tile: "bg-travel-tile" },
-  exercise: { card: "border-exercise-ink text-exercise-ink", tile: "bg-exercise-tile" },
-  shopping: { card: "border-shopping-ink text-shopping-ink", tile: "bg-shopping-tile" },
-  hobby: { card: "border-hobby-ink text-hobby-ink", tile: "bg-hobby-tile" },
-  other: { card: "border-other-ink text-other-ink", tile: "bg-other-tile" },
-}
-
-// A small tile on its own, like an option in the New reminder form's picker.
-const categoryChip: Record<Category, string> = {
-  work: "bg-work text-work-ink",
-  health: "bg-health-tile text-health-ink",
-  call: "bg-call-tile text-call-ink",
-  message: "bg-message-tile text-message-ink",
-  food: "bg-food-tile text-food-ink",
-  travel: "bg-travel-tile text-travel-ink",
-  exercise: "bg-exercise-tile text-exercise-ink",
-  shopping: "bg-shopping-tile text-shopping-ink",
-  hobby: "bg-hobby-tile text-hobby-ink",
-  other: "bg-other-tile text-other-ink",
+// Each kind of reminder's dot, as whole class names so Tailwind finds them. The dot sits beside the category's grey
+// icon or its name, so colour is never the only clue.
+const categoryDot: Record<Category, string> = {
+  work: "bg-work",
+  health: "bg-health",
+  call: "bg-call",
+  message: "bg-message",
+  food: "bg-food",
+  travel: "bg-travel",
+  exercise: "bg-exercise",
+  shopping: "bg-shopping",
+  hobby: "bg-hobby",
+  other: "bg-other",
 }
 
 const categoryName: Record<Category, string> = {
@@ -58,7 +29,7 @@ const categoryName: Record<Category, string> = {
   other: "Other",
 }
 
-// The design's icons, on a 24px grid. Call and message share a colour, so their icons tell them apart.
+// The design's icons, on a 24px grid. Call and message share a dot colour, so their icons tell them apart.
 const paths: Record<Category, string> = {
   work: "M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
   health: "M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z",
@@ -76,11 +47,11 @@ function CategoryIcon({ category, ...props }: SVGProps<SVGSVGElement> & { catego
   return (
     <svg
       viewBox="0 0 24 24"
-      width="13"
-      height="13"
+      width="14"
+      height="14"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2.2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -91,4 +62,30 @@ function CategoryIcon({ category, ...props }: SVGProps<SVGSVGElement> & { catego
   )
 }
 
-export { CategoryIcon, categoryChip, categoryLook, categoryName, dashedLook }
+// The clock before a reminder's time, on the cards and in the bar.
+function ClockIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="12"
+      height="12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  )
+}
+
+// A reminder's colour, as a small round dot before its title.
+function CategoryDot({ category, className = "size-2" }: { category: Category; className?: string }) {
+  return <span aria-hidden="true" className={`shrink-0 rounded-full ${categoryDot[category]} ${className}`} />
+}
+
+export { CategoryDot, CategoryIcon, ClockIcon, categoryName }

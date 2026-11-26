@@ -65,13 +65,13 @@ const topInDay = async (page: Page, dayName: string, title: string) =>
   (await box(day(page, dayName).getByRole("option").filter({ hasText: title }))).y - (await box(day(page, dayName).getByRole("listbox"))).y
 const hourLabel = (page: Page, time: string) => page.getByText(time, { exact: true })
 
-test("each card sits at its time: 48px an hour, so 15:30 is halfway between the 15:00 and 16:00 lines", async ({ page }) => {
+test("each card sits at its time: 54px an hour, so 15:30 is halfway between the 15:00 and 16:00 lines", async ({ page }) => {
   await goHome(page, [reminder("Gym", "2026-11-18T07:00:00Z"), reminder("Dentist", "2026-11-19T14:30:00Z")])
 
-  expect(await topInDay(page, "Wednesday 18 November", "Gym")).toBeCloseTo(2, 0)
-  expect(await topInDay(page, "Thursday 19 November", "Dentist")).toBeCloseTo(7.5 * 48 + 2, 0)
+  expect(await topInDay(page, "Wednesday 18 November", "Gym")).toBeCloseTo(3, 0)
+  expect(await topInDay(page, "Thursday 19 November", "Dentist")).toBeCloseTo(7.5 * 54 + 3, 0)
   const dentist = await box(day(page, "Thursday 19 November").getByRole("option"))
-  expect(dentist.y - 2).toBeCloseTo(((await middle(hourLabel(page, "15:00"))) + (await middle(hourLabel(page, "16:00")))) / 2, 0)
+  expect(dentist.y - 3).toBeCloseTo(((await middle(hourLabel(page, "15:00"))) + (await middle(hourLabel(page, "16:00")))) / 2, 0)
 })
 
 test("two cards at the same time sit side by side, both whole and both reachable", async ({ page }) => {
@@ -99,7 +99,7 @@ test("a 6:30 reminder starts the hours at 6:00, and one at 22:30 runs them to mi
   await expect(hourLabel(page, "05:00")).toHaveCount(0)
   await expect(hourLabel(page, "23:00")).toBeVisible()
   // Half an hour below the first line, 6:00.
-  expect(await topInDay(page, "Monday 16 November", "Run")).toBeCloseTo(0.5 * 48 + 2, 0)
+  expect(await topInDay(page, "Monday 16 November", "Run")).toBeCloseTo(0.5 * 54 + 3, 0)
 })
 
 test("the now line is in today's column at the current minute, and hidden outside the hours shown", async ({ page }) => {
@@ -109,7 +109,7 @@ test("the now line is in today's column at the current minute, and hidden outsid
   await expect(line).toHaveCount(1)
   await expect(day(page, "Wednesday 18 November").locator("[data-now]")).toHaveCount(1)
   const hours = await box(day(page, "Wednesday 18 November").getByRole("listbox"))
-  expect((await box(line)).y - hours.y).toBeCloseTo((2 + 20 / 60) * 48, 0)
+  expect((await box(line)).y - hours.y).toBeCloseTo((2 + 20 / 60) * 54, 0)
 
   await page.clock.setFixedTime(new Date("2026-11-18T07:30:00+01:00"))
   await page.reload()
@@ -122,17 +122,21 @@ test("each card's name says its category, which its colour and icon show", async
 
   const thursday = page.getByRole("listbox", { name: "Thursday 19 November" })
   await expect(thursday.getByRole("option").nth(0)).toHaveAccessibleName("Dentist, 09:00, health")
+  // On screen, a dot in its colour and its icon in grey, so colour is never the only clue.
+  await expect(thursday.getByRole("option").nth(0).locator(".bg-health")).toBeVisible()
+  await expect(thursday.getByRole("option").nth(0).locator("[data-card-icon] svg")).toBeVisible()
   // Other is the card's colour when nothing else fits, not a word worth hearing.
   await expect(thursday.getByRole("option").nth(1)).toHaveAccessibleName("Pay rent, 10:00")
 })
 
-test("a sent reminder shows a check, and a failed one says Not sent", async ({ page }) => {
+test("a sent reminder says Sent, and a failed one says Not sent", async ({ page }) => {
   await goHome(page, [
     reminder("Invoice", "2026-11-16T08:00:00Z", { status: "sent", sent_at: "2026-11-16T08:00:01Z" }),
     reminder("Call mum", "2026-11-17T17:30:00Z", { status: "failed" }),
   ])
 
-  await expect(day(page, "Monday 16 November").getByRole("img", { name: "Sent" })).toBeVisible()
+  await expect(day(page, "Monday 16 November").getByText("Sent", { exact: true })).toBeVisible()
+  await expect(page.getByText("Sent", { exact: true })).toHaveCount(1)
   await expect(day(page, "Tuesday 17 November").getByText("Not sent")).toBeVisible()
   await expect(page.getByText("Not sent")).toHaveCount(1)
 })

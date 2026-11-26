@@ -4,7 +4,7 @@ import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } 
 import { flushSync } from "react-dom";
 import { Account } from "@/components/account";
 import { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap, type CommandBarHandle } from "@/components/command-bar/command-bar";
-import { CalendarIcon, SparkleIcon } from "@/components/command-bar/icons";
+import { SparkleIcon } from "@/components/command-bar/icons";
 import type { Command } from "@/components/command-bar/commands";
 import type { Done, Proposal } from "@/components/command-bar/use-agent";
 import { cardRects, playArrival, playFadeIn } from "@/components/week/arrival";
@@ -25,7 +25,19 @@ type Outcome =
 
 const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
 
-const marked = "-mx-1 rounded-[2px] px-1 highlighter";
+// The reminder's title stands out from the rest of the line.
+const marked = "font-semibold";
+
+// The calendar tile in the header: today's month on red, and today's date under it.
+function TodayTile({ now, timezone, day }: { now: Date; timezone: string; day: string }) {
+  const month = new Intl.DateTimeFormat(undefined, { month: "short", timeZone: timezone }).format(now);
+  return (
+    <span aria-hidden="true" className="flex w-13 shrink-0 flex-col items-center overflow-hidden rounded-[14px] bg-surface shadow-tile">
+      <span className="w-full bg-month py-0.75 text-center text-[11px] font-bold tracking-[0.06em] text-on-month uppercase">{month}</span>
+      <span className="pt-0.75 pb-1.25 text-[22px] leading-tight font-bold tabular-nums">{day}</span>
+    </span>
+  );
+}
 
 function AgentOutcome({ done, reminder }: Done) {
   const title = <span className={marked}>{reminder.title}</span>;
@@ -103,7 +115,7 @@ export default function Home() {
   const shortcut = <CommandBarShortcut className={`${keycap} min-w-11 text-[12px]`} />;
 
   return (
-    <main className="mx-auto flex w-full max-w-[1272px] flex-1 flex-col px-4 py-6">
+    <main className="mx-auto flex w-full max-w-[1272px] flex-1 flex-col px-4 py-7">
       <CommandBar
         onChoose={(chosen) => setOutcome({ chosen })}
         onReminderSaved={(saved, from) => {
@@ -152,23 +164,29 @@ export default function Home() {
         className="flex flex-1 flex-col"
       >
         <header className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-fill text-on-accent">
-              <CalendarIcon className="size-5" />
-            </span>
-            {week && <h1 className="text-[26px] leading-tight font-extrabold tracking-[-0.02em]">{week.title}</h1>}
+          <div className="flex min-h-14 items-center gap-4">
+            {here && week && <TodayTile now={here.now} timezone={here.timezone} day={week.days.find((day) => day.today)?.number ?? ""} />}
+            {week && (
+              <div className="flex flex-col gap-0.5">
+                <h1 className="text-[26px] leading-tight font-semibold tracking-[-0.015em]">{week.title}</h1>
+                {/* Seen only: screen readers hear the week from the section's heading below. */}
+                <p aria-hidden="true" className="text-[14px] font-medium text-muted">
+                  Week of {week.range}
+                </p>
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <CommandBarTrigger className="flex min-h-11 items-center gap-2.5 rounded-full bg-accent-fill py-1 pr-2 pl-4 text-[14px] font-bold text-on-accent outline-offset-2 transition-transform duration-160 ease-out focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <CommandBarTrigger className="flex min-h-11.5 items-center gap-2.5 rounded-2xl bg-strong py-1 pr-2 pl-4.5 text-[15px] font-semibold text-on-strong outline-offset-2 transition-transform duration-160 ease-out focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100">
               <SparkleIcon className="size-4" />
               Ask anything
-              <CommandBarShortcut className="min-w-11 rounded-full bg-white/10 px-2.5 py-1 text-center font-sans text-[12px] font-bold" />
+              <CommandBarShortcut className="min-w-11 rounded-[10px] bg-strong-key px-2.25 py-1.25 text-center font-sans text-[12px] font-semibold" />
             </CommandBarTrigger>
             <Account />
           </div>
         </header>
         <section aria-labelledby="week-title" className="mt-5 flex flex-1 flex-col">
-          {/* The month title and each day's date say which week it is; this names it for screen readers. */}
+          {/* The header shows which week it is; this names it for screen readers. */}
           <h2 id="week-title" className="sr-only">
             This week{week && `, ${week.range}`}
           </h2>
