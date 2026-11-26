@@ -450,7 +450,10 @@ describe("“didn't understand” a message with a date or time", () => {
     const reply = await run(model, [tableQuestion])
 
     const why = "The person's message has a date or time, so it's a reminder to set"
+    // A question back, like the weather's, names what the reminder would be for.
+    const sayFor = "If you ask, say what the reminder would be for, in the person's own words."
     expect(JSON.stringify(model.doStreamCalls[1].prompt)).toContain(why)
+    expect(JSON.stringify(model.doStreamCalls[1].prompt)).toContain(sayFor)
     expect(notUnderstoodParts(reply)[0]).toMatchObject({ state: "output-error", errorText: expect.stringContaining(why) })
     expect(failures).not.toHaveBeenCalled()
     failures.mockRestore()

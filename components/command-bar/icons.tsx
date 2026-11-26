@@ -100,4 +100,14 @@ function SparkleIcon(props: IconProps) {
   )
 }
 
-export { AskIcon, BellIcon, CalendarIcon, CheckIcon, NoteAddIcon, NotesIcon, SearchIcon, SparkleIcon, CalendarAddIcon }
+// A link that opens in a new tab.
+function ExternalIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5" />
+      <path d="M12 9.5v3a1 1 0 0 1-1 1H3.5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3" />
+    </Icon>
+  )
+}
+
+export { AskIcon, BellIcon, CalendarIcon, CheckIcon, ExternalIcon, NoteAddIcon, NotesIcon, SearchIcon, SparkleIcon, CalendarAddIcon }

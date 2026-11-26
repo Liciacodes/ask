@@ -3,7 +3,7 @@ import { stackSpans } from "@ui-sdk/core"
 // The week's time grid as numbers: which hours it shows, and where each card and the now line sit in a day.
 // A card covers the hour from its time, so cards less than an hour apart share their day's width.
 
-const HOUR = 48
+const HOUR = 54
 const FIRST_HOUR = 8
 const LAST_HOUR = 23
 

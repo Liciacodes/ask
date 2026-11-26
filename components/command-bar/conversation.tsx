@@ -4,12 +4,14 @@ import { createStickToBottom, isComposing } from "@ui-sdk/core"
 import { Button } from "@ui-sdk/react/button"
 import { Input } from "@ui-sdk/react/input"
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { CategoryIcon, categoryLook } from "@/components/week/category-look"
+import { CategoryDot, CategoryIcon, ClockIcon } from "@/components/week/category-look"
 import { localWhen } from "@/components/week/days"
 import { examples, openings, type Reason } from "@/lib/agent/not-understood"
 import type { Card, Preview } from "@/lib/agent/plans"
+import type { Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
 import { localDateTime } from "@/lib/time"
+import { AddToCalendar } from "./calendar-link"
 import { CheckIcon, SparkleIcon } from "./icons"
 import { fieldRow, fieldText } from "./styles"
 import { isAction, type ActionPart, type Agent } from "./use-agent"
@@ -59,16 +61,17 @@ function Change({ was, now, same, className }: ChangeProps) {
   )
 }
 
-const titleLine = "text-[20px] leading-tight font-extrabold wrap-break-word"
-const whenLine = "text-[14px] font-medium tabular-nums"
-const detailsLine = "mt-1 text-[13px] wrap-break-word whitespace-pre-wrap"
+const titleLine = "min-w-0 text-[21px] leading-tight font-semibold wrap-break-word"
+const whenRow = "flex items-start gap-1.75 text-[15px] font-medium text-muted"
+const whenLine = "min-w-0 tabular-nums"
+const detailsLine = "mt-1 text-[14px] wrap-break-word whitespace-pre-wrap"
 
-// The weekday in bold, so a wrong day catches the eye before you approve. A day being replaced stays plain.
+// The weekday in bold ink, so a wrong day catches the eye before you approve. A day being replaced stays plain.
 function When({ card, plain = false }: { card: Card; plain?: boolean }) {
   const { weekday, rest } = localWhen(card)
   return (
     <>
-      <span data-weekday="" className={plain ? undefined : "font-bold"}>
+      <span data-weekday="" className={plain ? undefined : "font-bold text-ink"}>
         {weekday}
       </span>{" "}
       {rest}
@@ -76,17 +79,38 @@ function When({ card, plain = false }: { card: Card; plain?: boolean }) {
   )
 }
 
-function Details({ preview, marked }: { preview: Preview; marked: boolean }) {
-  const title = (card: Card) => (marked ? <span className="-mx-1 box-decoration-clone rounded-xs px-1 highlighter">{card.title}</span> : card.title)
+// The title after the category's dot, and the date and time after a clock, as on the week's cards.
+function TitleRow({ category, children }: { category: Category; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.25">
+      <CategoryDot category={category} className="size-2.5" />
+      {children}
+    </div>
+  )
+}
 
+function WhenRow({ children }: { children: ReactNode }) {
+  return (
+    <div className={whenRow}>
+      <ClockIcon className="mt-0.75 size-3.75 shrink-0" />
+      {children}
+    </div>
+  )
+}
+
+function Details({ preview }: { preview: Preview }) {
   if (preview.action !== "change") {
     const { reminder } = preview
     return (
       <>
-        <p className={titleLine}>{title(reminder)}</p>
-        <p className={whenLine}>
-          <When card={reminder} />
-        </p>
+        <TitleRow category={reminder.category}>
+          <p className={titleLine}>{reminder.title}</p>
+        </TitleRow>
+        <WhenRow>
+          <p className={whenLine}>
+            <When card={reminder} />
+          </p>
+        </WhenRow>
         {reminder.description && <p className={detailsLine}>{reminder.description}</p>}
       </>
     )
@@ -95,17 +119,21 @@ function Details({ preview, marked }: { preview: Preview; marked: boolean }) {
   const { before, after } = preview
   return (
     <>
-      {before.title === after.title ? (
-        <p className={titleLine}>{title(after)}</p>
-      ) : (
-        <Change was={before.title} now={after.title} same={false} className={titleLine} />
-      )}
-      <Change
-        was={<When card={before} plain />}
-        now={<When card={after} />}
-        same={before.date === after.date && before.time === after.time}
-        className={whenLine}
-      />
+      <TitleRow category={after.category}>
+        {before.title === after.title ? (
+          <p className={titleLine}>{after.title}</p>
+        ) : (
+          <Change was={before.title} now={after.title} same={false} className={titleLine} />
+        )}
+      </TitleRow>
+      <WhenRow>
+        <Change
+          was={<When card={before} plain />}
+          now={<When card={after} />}
+          same={before.date === after.date && before.time === after.time}
+          className={whenLine}
+        />
+      </WhenRow>
       {(before.description || after.description) && (
         <Change
           was={before.description ?? "No details"}
@@ -129,60 +157,57 @@ type PreviewCardProps = {
 // The reminder a card is about: after the change, for a change.
 const shownOn = (preview: Preview) => (preview.action === "change" ? preview.after : preview.reminder)
 
-const pill = "min-h-11 rounded-full px-4 outline-offset-2 focus-visible:outline-2"
+const button = "min-h-12 rounded-2xl px-4 text-[15px] font-semibold outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent"
 const press = "transition-transform duration-160 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
 
 function PreviewCard({ part, preview, refusal, active, onAnswer }: PreviewCardProps) {
   const words = wording[preview.action]
   const status = statusOf(part)
   const { category } = shownOn(preview)
-  const look = categoryLook[category]
-  // A work card is the accent itself, so its buttons swap shades to stand out from it.
-  const onAccent = category === "work"
-  const decline = onAccent ? "border border-work-ink text-work-ink focus-visible:outline-work-ink" : "bg-surface text-ink focus-visible:outline-accent"
-  // Cancelling is red on every card.
-  const approve =
-    preview.action === "cancel"
-      ? `bg-danger px-5 text-on-danger ${onAccent ? "focus-visible:outline-work-ink" : "focus-visible:outline-accent"}`
-      : onAccent
-        ? "bg-surface text-accent focus-visible:outline-work-ink"
-        : "bg-accent-fill px-5 text-on-accent focus-visible:outline-accent"
+  // Saying yes is the dark button, twice as wide; cancelling is red.
+  const approve = preview.action === "cancel" ? "bg-danger text-on-danger" : "bg-strong text-on-strong"
+  // Once the server has saved the reminder, it can go to Google Calendar too, unless it was cancelled. A card still
+  // waiting for your OK has nothing saved yet.
+  const saved = part.state === "output-available" && part.output.reminder.status !== "cancelled" ? part.output.reminder : undefined
 
   return (
     <section aria-label={words.heading} data-status={status} data-category={category} className="data-[status=declined]:opacity-60">
-      <div className={`flex flex-wrap items-center justify-between gap-3.5 rounded-[18px] p-3.5 ${look.card}`}>
-        {/* At least 14rem for the words: on a narrow screen the buttons move underneath instead of squeezing them. */}
-        <div className="flex min-w-0 grow basis-56 items-center gap-3">
-          <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-xl ${look.tile}`}>
-            <CategoryIcon category={category} className="size-5" />
-          </span>
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase">{words.heading}</h3>
-            <Details preview={preview} marked={active} />
+      <div className="flex flex-col gap-3.5 rounded-3xl bg-soft p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <h3 className="text-[12px] font-semibold tracking-[0.06em] text-muted uppercase">{words.heading}</h3>
+            <Details preview={preview} />
           </div>
+          {/* The category's icon in grey: with the dot, colour is never the only clue. */}
+          <span aria-hidden="true" className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-surface text-muted">
+            <CategoryIcon category={category} className="size-4" />
+          </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-[14px] font-bold">
-          {status === "waiting" && active && (
-            <>
-              <Button onClick={() => onAnswer(false)} className={`${pill} ${decline}`}>
-                {words.decline}
-              </Button>
-              <Button onClick={() => onAnswer(true)} className={`${pill} ${press} ${approve}`}>
-                {words.approve}
-              </Button>
-            </>
-          )}
+        {status === "waiting" && active && (
+          <div className="flex gap-2.5">
+            <Button onClick={() => onAnswer(false)} className={`${button} flex-1 border border-line bg-surface text-ink`}>
+              {words.decline}
+            </Button>
+            <Button onClick={() => onAnswer(true)} className={`${button} ${press} flex-2 ${approve}`}>
+              {words.approve}
+            </Button>
+          </div>
+        )}
+        <div className="text-[14px] font-semibold empty:hidden">
           {status === "working" && <p>{words.working}</p>}
           {status === "done" && (
-            <p className="flex items-center gap-1.5">
-              <CheckIcon className="size-3.5" />
-              {words.done}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5">
+                <CheckIcon className="size-3.5" />
+                {words.done}
+              </p>
+              {saved && <AddToCalendar reminder={saved} />}
+            </div>
           )}
           {status === "declined" && <p>{words.declined}</p>}
         </div>
       </div>
-      {/* Below the card, on the bar's own white, where the error colour reads on every category. */}
+      {/* Below the card, on the bar's own white. */}
       {(status === "refused" || status === "failed") && (
         <p role="alert" className="mt-2 px-1 text-[13px] font-semibold text-error">
           {status === "refused" ? (refusal ?? "Ask couldn't do this.") : part.state === "output-error" && part.errorText}
@@ -269,7 +294,7 @@ function Conversation({ agent }: { agent: Agent }) {
   return (
     <>
       <div className={fieldRow}>
-        <SparkleIcon className="size-4.5 shrink-0 text-accent" />
+        <SparkleIcon className="size-4.5 shrink-0 text-ink" />
         <Input
           ref={field}
           autoFocus

@@ -4,11 +4,11 @@ import { Button } from "@ui-sdk/react/button"
 import { createParts } from "@ui-sdk/react/primitive"
 import type { TransferMessage } from "@ui-sdk/core"
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react"
-import { CheckIcon, NotesIcon } from "@/components/command-bar/icons"
+import { NotesIcon } from "@/components/command-bar/icons"
 import type { Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
 import { localDateTime } from "@/lib/time"
-import { CategoryIcon, categoryLook, dashedLook } from "./category-look"
+import { CategoryDot, CategoryIcon, ClockIcon } from "./category-look"
 import { dayKey, timeOf, type Day } from "./days"
 import { gridHeight, HOUR, hourLabels, hoursShown, nowTop, placeCards, type Hours, type Placed } from "./grid"
 import { canMoveTo } from "./moves"
@@ -47,24 +47,51 @@ const clockOf = (time: string) => {
   return clock(hour, minute)
 }
 
-// What a dashed card shows: the card's icon and title, and its time "· not saved". The same face lies over a card that
-// has just been saved, and fades to show it.
+// A card's words: its dot and title, then a clock and its time, with whatever follows the time.
+const cardWords = "flex min-w-0 flex-1 flex-col gap-0.75"
+const titleRow = "flex min-w-0 items-center gap-1.75"
+const cardTitle = "min-w-0 text-[13px] leading-[1.2] font-semibold wrap-break-word md:truncate"
+const timeRow = "flex min-w-0 items-center gap-1.5 overflow-hidden text-[12px] font-medium whitespace-nowrap text-muted tabular-nums"
+// A pill follows the time when its card has room for it, as on a phone. A grid card is narrower: there the pill sits
+// on the card's bottom edge instead, ringed in white, clear of the title, so it's never cut off. Each needs room for
+// "10:00 AM", the clock and the icon beside it, so each has its own width. Whole class names, so Tailwind finds them.
+const pill = "shrink-0 rounded-lg px-1.75 py-px text-[11px] font-semibold"
+const pills = {
+  sent: `${pill} bg-sent text-sent-ink @max-[138px]:absolute @max-[138px]:-bottom-2.5 @max-[138px]:right-2.5 @max-[138px]:ring-2 @max-[138px]:ring-surface`,
+  failed: `${pill} bg-failed text-failed-ink @max-[159px]:absolute @max-[159px]:-bottom-2.5 @max-[159px]:right-2.5 @max-[159px]:ring-2 @max-[159px]:ring-surface`,
+  unsaved: `${pill} bg-unsaved text-unsaved-ink @max-[166px]:absolute @max-[166px]:-bottom-2.5 @max-[166px]:right-2.5 @max-[166px]:ring-2 @max-[166px]:ring-surface`,
+}
+// The category's icon, in grey at the card's end: with the dot and the card's name, colour is never the only clue.
+const cardIcon = "grid shrink-0 place-items-center text-muted"
+
+// What a dashed card shows: the card's dot, title, time and icon, with a "Not saved" pill. The same face lies over a
+// card that has just been saved, and fades to show it.
 function DashedFace({ title, category, time }: { title: string; category: Category; time: string }) {
   return (
     <>
-      <span data-card-icon="" className={`grid size-5.5 shrink-0 place-items-center rounded-[7px] ${dashedLook[category].tile}`}>
-        <CategoryIcon category={category} />
+      <span data-card-words="" className={cardWords}>
+        <span className={titleRow}>
+          <CategoryDot category={category} />
+          <span className={cardTitle}>{title}</span>
+        </span>
+        <span className={timeRow}>
+          <ClockIcon className="shrink-0" />
+          {time}
+          <span className={pills.unsaved}>Not saved</span>
+        </span>
       </span>
-      <span data-card-words="" className="flex min-w-0 flex-1 flex-col">
-        <span className="text-[13px] leading-tight font-bold wrap-break-word md:truncate">{title}</span>
-        <span className="text-[11px] font-semibold tabular-nums">{time} · not saved</span>
+      <span data-card-icon="" className={cardIcon}>
+        <CategoryIcon category={category} />
       </span>
     </>
   )
 }
 
-// The border takes 2px of the card's padding, so the words sit exactly where the saved card's will.
-const dashedCard = "rounded-xl border-2 border-dashed bg-surface px-1.5 py-1"
+// Every card is white with soft corners. A saved one has a thin border and a soft shadow; one that isn't saved yet
+// has a dashed border, half a pixel thicker, which takes half a pixel of its padding so the words sit exactly where
+// the saved card's will.
+const savedCard = "rounded-2xl border border-line bg-surface px-2.5 py-1.5 text-ink shadow-card"
+const dashedCard = "rounded-2xl border-[1.5px] border-dashed border-dashed-line bg-surface px-[9.5px] py-[5.5px] text-ink"
 
 // What a screen reader calls a card. Its colour and icon don't reach them, so its category is in the words.
 function cardName(reminder: ReminderJson, timezone: string) {
@@ -103,9 +130,9 @@ function NowLine({ timezone, hours }: { timezone: string; hours: Hours }) {
       aria-hidden="true"
       data-now=""
       style={at({ "--now-at": `${HEADER + top}px` })}
-      className="pointer-events-none absolute inset-x-0 top-(--now-at) hidden h-0.5 bg-now md:block"
+      className="pointer-events-none absolute inset-x-0 top-(--now-at) hidden h-0.5 rounded-xs bg-now md:block"
     >
-      <span className="absolute -top-1 -left-1.25 size-2.5 rounded-full bg-now" />
+      <span className="absolute -top-0.75 -left-1 size-2 rounded-full bg-now" />
     </div>
   )
 }
@@ -120,7 +147,7 @@ function WeekNote({ state, onRetry, emptyHint }: WeekNoteProps) {
       <span className="text-error">Ask couldn&apos;t load this week. Check your connection and try again.</span>
       <Button
         onClick={onRetry}
-        className="rounded-sm border border-line bg-surface px-2.5 py-1 text-[13px] text-ink outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent"
+        className="rounded-xl border border-line bg-surface px-3 py-1 text-[13px] font-semibold text-ink shadow-button outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent"
       >
         Try again
       </Button>
@@ -239,11 +266,12 @@ function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded
     ...reminders.filter((reminder) => dayOf(reminder) in lists).map(timeIn),
     ...(shownDashed && shownDashed.day in lists ? [shownDashed.time] : []),
   ])
+  // A 48px card in its 54px hour, 3px clear above and below and 5px clear of its lane's sides.
   const spotAt = (spot: Placed) =>
     at({
-      "--top": `${spot.top + 2}px`,
-      "--left": `calc(${(spot.lane * 100) / spot.lanes}% + 4px)`,
-      "--width": `calc(${100 / spot.lanes}% - 8px)`,
+      "--top": `${spot.top + 3}px`,
+      "--left": `calc(${(spot.lane * 100) / spot.lanes}% + 5px)`,
+      "--width": `calc(${100 / spot.lanes}% - 10px)`,
     })
   const dayLabel = (key: string) => days.find((day) => day.key === key)?.label
   // The drop says nothing itself: the status line says "Moved…" or "Couldn't move…" once the server answers.
@@ -265,14 +293,14 @@ function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded
           same days stack, each with its cards in a list. */}
       <div
         style={at({ "--grid": `${gridHeight(hours)}px` })}
-        className="mt-5 rounded-3xl border border-line bg-surface p-2 shadow-board md:grid md:grid-cols-[64px_minmax(0,1fr)] md:pb-4"
+        className="mt-5 rounded-4xl bg-surface p-3 shadow-board md:grid md:grid-cols-[64px_minmax(0,1fr)] md:pb-5"
       >
         <div aria-hidden="true" className="relative hidden md:block">
           {hourLabels(hours).map((hour) => (
             <span
               key={hour}
               style={at({ "--at": `${HEADER + (hour - hours.first) * HOUR}px` })}
-              className="absolute top-(--at) right-2.5 -translate-y-1/2 text-[11px] font-semibold whitespace-nowrap text-muted tabular-nums"
+              className="absolute top-(--at) right-3 -translate-y-1/2 text-[12px] font-medium whitespace-nowrap text-muted tabular-nums"
             >
               {hourLabel(hour)}
             </span>
@@ -311,11 +339,12 @@ function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded
                 const placed = placeCards(slots, hours)
                 return (
                   <>
-                    <h3 aria-label={day.label} className="flex w-12 shrink-0 flex-col items-center gap-1 md:h-18 md:w-auto md:justify-center md:gap-1.5">
-                      <span className={`text-[12px] font-bold tracking-widest uppercase ${day.today ? "text-accent" : "text-muted"}`}>{day.weekday}</span>
+                    <h3 aria-label={day.label} className="flex w-12 shrink-0 flex-col items-center gap-1.5 md:h-18 md:w-auto md:justify-center">
+                      <span className="text-[14px] font-medium text-muted">{day.weekday}</span>
+                      {/* Today's date is a dark circle. */}
                       <span
-                        className={`grid size-9 place-items-center rounded-full text-[17px] font-extrabold tabular-nums ${
-                          day.today ? "bg-accent-fill text-on-accent" : "text-ink"
+                        className={`grid size-9.5 place-items-center rounded-full text-[17px] font-semibold tabular-nums ${
+                          day.today ? "bg-strong text-on-strong" : "text-ink"
                         }`}
                       >
                         {day.number}
@@ -337,14 +366,13 @@ function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded
                               aria-hidden="true"
                               data-dashed=""
                               style={spotAt(spot)}
-                              className={`@container pointer-events-none flex min-h-11 items-center gap-2 md:absolute md:top-(--top) md:left-(--left) md:h-11 md:w-(--width) ${dashedCard} ${dashedLook[ghost.category].card}`}
+                              className={`@container pointer-events-none relative flex min-h-12 items-center gap-2 md:absolute md:top-(--top) md:left-(--left) md:h-12 md:w-(--width) ${dashedCard}`}
                             >
                               <DashedFace title={ghost.title} category={ghost.category} time={clockOf(ghost.time)} />
                             </li>
                           )
                         }
                         const reminder = byId.get(id)!
-                        const look = categoryLook[reminder.category]
                         return (
                           <parts.Card
                             key={reminder.id}
@@ -356,37 +384,41 @@ function Week({ days, timezone, state, newest, saving, dashed, landing, onLanded
                             aria-label={cardName(reminder, timezone)}
                             aria-describedby={locked(reminder.id) ? undefined : moveHint}
                             style={spotAt(spot)}
-                            className={`@container relative flex min-h-11 items-center gap-2 rounded-xl px-2 py-1.5 outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent md:absolute md:top-(--top) md:left-(--left) md:h-11 md:w-(--width) ${look.card}`}
+                            className={`@container relative flex min-h-12 items-center gap-2 outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent md:absolute md:top-(--top) md:left-(--left) md:h-12 md:w-(--width) ${savedCard}`}
                           >
-                            <span aria-hidden="true" data-card-icon="" className={`grid size-5.5 shrink-0 place-items-center rounded-[7px] ${look.tile}`}>
-                              <CategoryIcon category={reminder.category} />
-                            </span>
-                            <span data-card-words="" className="flex min-w-0 flex-1 flex-col">
-                              <span className="text-[13px] leading-tight font-bold wrap-break-word md:truncate">{reminder.title}</span>
-                              <span className="flex items-center gap-1 text-[11px] font-semibold tabular-nums">
+                            <span data-card-words="" className={cardWords}>
+                              <span className={titleRow}>
+                                <CategoryDot category={reminder.category} />
+                                <span className={cardTitle}>{reminder.title}</span>
+                              </span>
+                              <span className={timeRow}>
+                                <ClockIcon className="shrink-0" />
                                 <time dateTime={reminder.due_at}>{timeOf(reminder, timezone)}</time>
-                                {reminder.status === "sent" && <CheckIcon aria-hidden={false} aria-label="Sent" role="img" className="size-3" />}
-                                {reminder.status === "failed" && <span className="truncate">Not sent</span>}
+                                {reminder.status === "sent" && <span className={pills.sent}>Sent</span>}
+                                {reminder.status === "failed" && <span className={pills.failed}>Not sent</span>}
                                 {/* A grid card has no room for its note: an icon says there is one, and shows it on hover.
                                     Screen readers hear the note in the card's name. */}
                                 {reminder.description && (
-                                  <span data-note-icon="" title={reminder.description} aria-hidden="true" className="hidden md:inline-grid">
+                                  <span data-note-icon="" title={reminder.description} aria-hidden="true" className="hidden shrink-0 md:inline-grid">
                                     <NotesIcon className="size-3" />
                                   </span>
                                 )}
                               </span>
                               {reminder.description && (
-                                <span data-note="" aria-hidden="true" className="truncate text-[11px] font-medium md:hidden">
+                                <span data-note="" aria-hidden="true" className="truncate text-[12px] font-medium text-muted md:hidden">
                                   {reminder.description}
                                 </span>
                               )}
+                            </span>
+                            <span aria-hidden="true" data-card-icon="" className={cardIcon}>
+                              <CategoryIcon category={reminder.category} />
                             </span>
                             {landing === reminder.id && (
                               <span
                                 ref={landingFace}
                                 aria-hidden="true"
                                 data-landing=""
-                                className={`absolute inset-0 flex items-center gap-2 ${dashedCard} ${dashedLook[reminder.category].card}`}
+                                className={`absolute -inset-px flex items-center gap-2 ${dashedCard}`}
                               >
                                 <DashedFace title={reminder.title} category={reminder.category} time={timeOf(reminder, timezone)} />
                               </span>

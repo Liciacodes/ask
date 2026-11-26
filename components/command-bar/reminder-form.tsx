@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectItemIcon, SelectItemIndicator,
 import { Textarea } from "@ui-sdk/react/textarea"
 import { TimeInput } from "@ui-sdk/react/time-input"
 import { useRef, useState, type FormEvent } from "react"
-import { CategoryIcon, categoryChip, categoryName } from "@/components/week/category-look"
+import { CategoryDot, CategoryIcon, categoryName } from "@/components/week/category-look"
 import { CATEGORIES, guessCategory, type Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
 import { localDateTime } from "@/lib/time"
+import { AddToCalendar } from "./calendar-link"
 import { CheckIcon } from "./icons"
 
 type Problems = { title?: string; when?: string; note?: string; form?: string }
@@ -42,8 +43,10 @@ function problemsFrom(body: unknown): Problems {
   return problems
 }
 
-const label = "text-[12px] font-bold text-muted data-invalid:text-error"
-const line = "flex h-10 w-full items-center border-b-[1.5px] border-line text-[17px] font-semibold focus-within:border-accent data-invalid:border-error"
+const label = "text-[12px] font-semibold text-muted data-invalid:text-error"
+const line = "flex h-10 w-full items-center border-b-[1.5px] border-line text-[17px] font-medium focus-within:border-accent data-invalid:border-error"
+// The category's grey icon on a soft tile, then its dot and name: colour is never the only clue.
+const categoryTile = "grid place-items-center rounded-lg bg-soft text-muted"
 const error = "mt-1.5 text-[13px] font-semibold text-error"
 
 // A new reminder, or with `editing`, one from the week, filled in and saved with "Save changes".
@@ -134,7 +137,7 @@ function ReminderForm({ editing, onSaved, onDeleted }: ReminderFormProps) {
             clear("title")
             if (!picked) setCategory(guessCategory(value))
           }}
-          className="h-10 w-full border-b-[1.5px] border-line bg-transparent text-[17px] font-semibold text-ink outline-none placeholder:font-medium placeholder:text-muted focus:border-accent data-invalid:border-error"
+          className="h-10 w-full border-b-[1.5px] border-line bg-transparent text-[17px] font-medium text-ink outline-none placeholder:font-medium placeholder:text-muted focus:border-accent data-invalid:border-error"
         />
         <FieldError match="valueMissing" className={error}>
           Add a title
@@ -176,10 +179,11 @@ function ReminderForm({ editing, onSaved, onDeleted }: ReminderFormProps) {
               setPicked(true)
             }}
           >
-            <SelectTrigger className="flex h-10 items-center gap-2 rounded-full border border-line bg-surface pr-3 pl-1.5 text-[14px] font-bold text-ink outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent data-open:border-accent">
-              <span aria-hidden="true" className={`grid size-7 place-items-center rounded-full ${categoryChip[category]}`}>
+            <SelectTrigger className="flex h-10 items-center gap-2 rounded-2xl border border-line bg-surface pr-3 pl-1.5 text-[14px] font-semibold text-ink outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent data-open:border-accent">
+              <span aria-hidden="true" className={`size-7 ${categoryTile}`}>
                 <CategoryIcon category={category} />
               </span>
+              <CategoryDot category={category} />
               <SelectValue />
               <svg aria-hidden="true" viewBox="0 0 16 16" className="size-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                 <path d="m4 6 4 4 4-4" />
@@ -190,13 +194,14 @@ function ReminderForm({ editing, onSaved, onDeleted }: ReminderFormProps) {
                 <SelectItem
                   key={option}
                   value={option}
-                  className="flex cursor-default items-center gap-2.5 rounded-lg px-2 py-1.5 text-[14px] font-semibold data-highlighted:bg-selected"
+                  className="flex cursor-default items-center gap-2.5 rounded-xl px-2 py-1.5 text-[14px] font-semibold data-highlighted:bg-selected"
                 >
                   <SelectItemIcon>
-                    <span className={`grid size-6 place-items-center rounded-md ${categoryChip[option]}`}>
+                    <span className={`size-6 ${categoryTile}`}>
                       <CategoryIcon category={option} />
                     </span>
                   </SelectItemIcon>
+                  <CategoryDot category={option} />
                   {categoryName[option]}
                   <SelectItemIndicator className="ml-auto">
                     <CheckIcon className="size-3.5" />
@@ -225,6 +230,8 @@ function ReminderForm({ editing, onSaved, onDeleted }: ReminderFormProps) {
           </FieldError>
         )}
       </Field>
+      {/* The reminder as it's saved, not as the form shows it: a change goes to Google only once it's saved here. */}
+      {editing && <AddToCalendar reminder={editing} className="self-start" />}
       <div className="flex items-center justify-end gap-4">
         {problems.form && (
           <p role="alert" data-problem="" className="mr-auto text-[13px] font-semibold text-error">
@@ -237,7 +244,7 @@ function ReminderForm({ editing, onSaved, onDeleted }: ReminderFormProps) {
             onClick={remove}
             disabled={saving}
             focusableWhenDisabled
-            className="min-h-11 rounded-full bg-danger px-5 text-[14px] font-bold text-on-danger outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent data-disabled:opacity-70"
+            className="min-h-12 rounded-2xl bg-danger px-5 text-[15px] font-semibold text-on-danger outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent data-disabled:opacity-70"
           >
             {confirming ? "Delete for good?" : "Delete reminder"}
           </Button>
@@ -246,7 +253,7 @@ function ReminderForm({ editing, onSaved, onDeleted }: ReminderFormProps) {
           type="submit"
           disabled={saving}
           focusableWhenDisabled
-          className="min-h-11 rounded-full bg-accent-fill px-5 text-[14px] font-bold text-on-accent transition-transform duration-160 ease-out outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] data-disabled:opacity-70 motion-reduce:transition-none motion-reduce:active:scale-100"
+          className="min-h-12 rounded-2xl bg-strong px-6 text-[15px] font-semibold text-on-strong transition-transform duration-160 ease-out outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] data-disabled:opacity-70 motion-reduce:transition-none motion-reduce:active:scale-100"
         >
           {saving ? "Saving…" : editing ? "Save changes" : "Save"}
         </Button>

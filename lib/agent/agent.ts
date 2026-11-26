@@ -96,7 +96,7 @@ async function carryOut(plan: Plan) {
 class AskAgain extends Error {
   constructor() {
     super(
-      "The person's message has a date or time, so it's a reminder to set, even if you can't do the task yourself: propose it, or ask what's missing. Only if it has nothing to do with a reminder, call didNotUnderstand again."
+      "The person's message has a date or time, so it's a reminder to set, even if you can't do the task yourself: propose it, or ask what's missing. If you ask, say what the reminder would be for, in the person's own words. Only if it has nothing to do with a reminder, call didNotUnderstand again."
     )
   }
 }

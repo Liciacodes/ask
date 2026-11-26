@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
-import { CATEGORIES } from "@/lib/categories"
-import { fakeAgent, proposes, says, turn } from "./fake-agent"
+import { did, fakeAgent, proposes, says, turn } from "./fake-agent"
 import { bar, fakeMe, fakeSave, goHome, openBar, openForm, reminder, status, title } from "./helpers"
 
 // Every word on the main screens, light and dark, reads at 4.5:1 against what's behind it (3:1 for large text, and
@@ -94,62 +93,50 @@ async function expectReadable(page: Page, scope: string | null = null) {
   expect(await page.evaluate(lowContrast, scope)).toEqual([])
 }
 
-// Each kind of reminder's dashed card, as the week draws one that isn't saved yet: its words on white, its icon on its
-// tile. A work card's words take the accent, and its tile is the accent with a white icon.
-async function addDashedSwatches(page: Page, categories: readonly string[]) {
-  await page.evaluate((names) => {
+// Every card is white, whatever its category: only its dot takes the category's colour. The dot is decoration, because
+// the grey icon and the card's name say the category too, so it isn't measured. The grey icons are: here, as a
+// graphic at 3:1, on each surface one is drawn on. Words are all measured where the screens draw them.
+async function addIconSwatches(page: Page) {
+  await page.evaluate(() => {
     const shelf = document.createElement("div")
-    shelf.dataset.dashedSwatches = ""
-    for (const name of names) {
-      const work = name === "work"
-      const card = document.createElement("div")
-      card.style.cssText = `background-color: var(--surface); color: var(${work ? "--accent" : `--${name}-ink`}); padding: 8px; font-size: 11px; font-weight: 600`
-      const tile = document.createElement("span")
-      tile.dataset.graphic = ""
-      tile.style.cssText = `background-color: var(--${work ? "work" : `${name}-tile`}); ${work ? "color: var(--work-ink);" : ""} padding: 2px`
-      tile.textContent = "■"
-      card.append(tile, ` ${name}: 18:00 · not saved`)
-      shelf.append(card)
+    shelf.dataset.iconSwatches = ""
+    // A card's icon on the card; the bar card's icon on its white tile, inside the soft grey card; the form's on its
+    // soft tile; the bar's command icons on the chosen row's tint.
+    for (const surface of ["--surface", "--soft", "--selected", "--today"]) {
+      const behind = document.createElement("div")
+      behind.style.cssText = `background-color: var(${surface}); padding: 4px`
+      const icon = document.createElement("span")
+      icon.dataset.graphic = ""
+      icon.style.cssText = "color: var(--muted)"
+      icon.textContent = `■ icon on ${surface}`
+      behind.append(icon)
+      shelf.append(behind)
     }
     document.querySelector("main")!.append(shelf)
-  }, categories)
-}
-
-// Each kind of reminder's colours, before any screen uses them: its words on its card, and its icon on its tile.
-async function addCategorySwatches(page: Page, categories: readonly string[]) {
-  await page.evaluate((names) => {
-    const shelf = document.createElement("div")
-    for (const name of names) {
-      const card = document.createElement("div")
-      card.style.cssText = `background-color: var(--${name}); color: var(--${name}-ink); padding: 8px; font-size: 13px`
-      const tile = document.createElement("span")
-      tile.dataset.graphic = ""
-      tile.style.cssText = `background-color: var(--${name}-tile); padding: 2px`
-      tile.textContent = "■"
-      card.append(tile, ` ${name}: Dentist, 09:00`)
-      shelf.append(card)
-    }
-    document.querySelector("main")!.append(shelf)
-  }, categories)
+  })
 }
 
 for (const colorScheme of ["light", "dark"] as const) {
   test.describe(colorScheme, () => {
     test.use({ colorScheme })
 
-    test("the week, a status line with its highlighter, and every kind of reminder's colours", async ({ page }) => {
+    test("the header's calendar tile, the week with its Sent and Not sent pills, a status line, and the grey icons", async ({ page }) => {
       await fakeSave(page)
       await goHome(page, [
-        reminder("Dentist", "2026-11-18T08:00:00Z"),
-        reminder("Invoice", "2026-11-16T08:00:00Z", { status: "sent", sent_at: "2026-11-16T08:00:01Z" }),
-        reminder("Call mum", "2026-11-17T17:30:00Z", { status: "failed" }),
+        // Today's column is tinted, so a card there is measured on it too.
+        reminder("Dentist", "2026-11-18T08:00:00Z", { category: "health", description: "Bring the forms" }),
+        reminder("Invoice", "2026-11-16T08:00:00Z", { status: "sent", sent_at: "2026-11-16T08:00:01Z", category: "work" }),
+        reminder("Call mum", "2026-11-17T17:30:00Z", { status: "failed", category: "call" }),
       ])
       await openForm(page)
       await title(page).fill("Buy milk")
       await page.keyboard.press("Enter")
       await expect(status(page)).toContainText("Saved Buy milk")
-      await addCategorySwatches(page, CATEGORIES)
+      await addIconSwatches(page)
 
+      // Proves the tile, the pills and today's dark circle are among the words measured.
+      const words = ["Nov", "18", "Sent", "Not sent"]
+      for (const word of words) expect(await page.getByText(word, { exact: true }).count(), word).toBeGreaterThan(0)
       await expectReadable(page)
     })
 
@@ -213,7 +200,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expectReadable(page)
     })
 
-    test("a dashed card waiting for your OK, in every kind of reminder's colours", async ({ page }) => {
+    test("a dashed card waiting for your OK, with its Not saved pill", async ({ page }) => {
       const card = { title: "Call Ada", description: null, date: "2026-11-20", time: "18:00", category: "call" } as const
       await fakeAgent(page, turn(proposes("createReminder", { title: "Call Ada", date: "2026-11-20", time: "18:00", category: "call" }, { action: "create", reminder: card })))
       await goHome(page)
@@ -221,20 +208,65 @@ for (const colorScheme of ["light", "dark"] as const) {
       await page.keyboard.type("call ada friday at 6pm")
       await page.keyboard.press("Enter")
       await expect(page.locator("[data-dashed]")).toBeVisible()
-      await addDashedSwatches(page, CATEGORIES)
 
       // Proves the dashed card's own words are among those measured.
-      expect(await page.locator("[data-dashed]").getByText("18:00 · not saved").count()).toBe(1)
-      await expectReadable(page, "[data-dashed], [data-dashed-swatches]")
+      expect(await page.locator("[data-dashed]").getByText("Not saved", { exact: true }).count()).toBe(1)
+      await expectReadable(page, "[data-dashed]")
     })
 
-    test("a reminder opened to edit, with its red Delete reminder button", async ({ page }) => {
+    test("a reminder the AI saved, with its Add to Google Calendar link on the soft grey card", async ({ page }) => {
+      const card = { title: "Call Ada", description: null, date: "2026-11-20", time: "18:00", category: "call" } as const
+      const saved = reminder("Call Ada", "2026-11-20T17:00:00.000Z", { category: "call" })
+      await fakeAgent(
+        page,
+        turn(proposes("createReminder", { title: "Call Ada", date: "2026-11-20", time: "18:00", category: "call" }, { action: "create", reminder: card })),
+        turn(did("create", saved))
+      )
+      await goHome(page)
+      await openBar(page)
+      await page.keyboard.type("call ada friday at 6pm")
+      await page.keyboard.press("Enter")
+      await expect(bar(page).getByRole("button", { name: "Save", exact: true })).toBeVisible()
+      await page.keyboard.press("Enter")
+
+      await expect(bar(page).getByRole("link", { name: /^Add to Google Calendar/ })).toBeVisible()
+      await expectReadable(page)
+    })
+
+    test("a cancel waiting for your OK, with its red Cancel reminder button on the soft grey card", async ({ page }) => {
+      const dentist = reminder("Dentist", "2026-11-19T08:00:00.000Z", { category: "health" })
+      const card = { title: "Dentist", description: null, date: "2026-11-19", time: "09:00", category: "health" } as const
+      await fakeAgent(page, turn(proposes("cancelReminder", { id: dentist.id }, { action: "cancel", reminder: card })))
+      await goHome(page, [dentist])
+      await openBar(page)
+      await page.keyboard.type("cancel the dentist")
+      await page.keyboard.press("Enter")
+
+      await expect(bar(page).getByRole("button", { name: "Cancel reminder" })).toBeVisible()
+      await expectReadable(page)
+    })
+
+    test("a reminder opened to edit, with its Add to Google Calendar link and red Delete reminder button", async ({ page }) => {
       await goHome(page, [reminder("Dentist", "2026-11-19T08:00:00.000Z", { description: "Bring the forms" })])
       await page.getByRole("option", { name: /^Dentist/ }).click()
 
       await expect(bar(page).getByRole("button", { name: "Delete reminder" })).toBeVisible()
+      await expect(bar(page).getByRole("link", { name: /^Add to Google Calendar/ })).toBeVisible()
       await expectReadable(page)
     })
+
+    for (const [path, heading] of [
+      ["/privacy", "Privacy"],
+      ["/terms", "Terms"],
+    ]) {
+      test(`the ${heading} page, with its links and footer`, async ({ page }) => {
+        await page.goto(path)
+
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading)
+        await expect(page.getByRole("navigation", { name: "Legal" })).toBeVisible()
+        await expectReadable(page)
+      })
+    }
 
     test("the week when it can't load", async ({ page }) => {
       await page.route("**/api/week?*", (route) => route.fulfill({ status: 500, json: { error: "Database unavailable" } }))

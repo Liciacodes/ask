@@ -78,9 +78,10 @@ test("an action waits for your OK on a preview card, and nothing is sent until y
 
   const preview = card(page, "New reminder")
   await expect(preview).toContainText("Call mum")
-  // In its category's colour and icon, as it will look in the week.
+  // On a soft grey card, with its category's dot and grey icon, as it will look in the week.
   await expect(preview).toHaveAttribute("data-category", "call")
-  await expect(preview.locator("div").first()).toHaveCSS("background-color", await painted(page, "--call"))
+  await expect(preview.locator("div").first()).toHaveCSS("background-color", await painted(page, "--soft"))
+  await expect(preview.locator(".bg-call")).toHaveCount(1)
   await expect(preview).toContainText("Friday 20 Nov, 18:00")
   // The day stands out, so a wrong one is noticed before saying yes.
   await expect(preview.locator("[data-weekday]")).toHaveText("Friday")

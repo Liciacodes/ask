@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 
 type User = { name: string | null; email: string; picture: string | null };
 
+// White, beside the dark "Ask anything" button.
 const pill =
-  "flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface px-4 text-[14px] font-bold text-ink outline-offset-2 transition-transform duration-160 ease-out focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
+  "flex min-h-11.5 items-center gap-2 rounded-2xl bg-surface px-4 text-[15px] font-semibold text-ink shadow-button outline-offset-2 transition-transform duration-160 ease-out focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100";
 
 // Signing in is optional: a guest sees "Sign in with Google", someone signed in sees who they are and "Sign out".
 // The page is static, so it asks /api/auth/me who's here. After a failed sign-in Google's trip ends on
@@ -41,7 +42,7 @@ export function Account() {
     window.location.reload();
   };
 
-  if (user === undefined) return <div className="min-h-11" />;
+  if (user === undefined) return <div className="min-h-11.5" />;
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -52,13 +53,13 @@ export function Account() {
       )}
       {user ? (
         <>
-          <span className="flex items-center gap-2 text-[14px] font-semibold text-ink">
+          <span className="flex items-center gap-2 text-[15px] font-semibold text-ink">
             {user.picture ? (
               // Google's own picture of them; no referrer, as Google asks.
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.picture} alt="" referrerPolicy="no-referrer" className="size-8 rounded-full" />
+              <img src={user.picture} alt="" referrerPolicy="no-referrer" className="size-8.5 rounded-full" />
             ) : (
-              <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-accent-fill text-[13px] font-extrabold text-on-accent">
+              <span aria-hidden="true" className="grid size-8.5 place-items-center rounded-full bg-avatar text-[14px] font-bold text-avatar-ink">
                 {(user.name ?? user.email).charAt(0).toUpperCase()}
               </span>
             )}
