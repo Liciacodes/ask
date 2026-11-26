@@ -76,6 +76,8 @@ async function goHome(page: Page, week: ReminderJson[] | "already faked" = []) {
   // No browser test reaches the real /api/agent. A test's own fake (e2e/fake-agent.ts) is a page route, and page
   // routes always win over this context route.
   await page.context().route("**/api/agent", (route) => route.abort("blockedbyclient"))
+  // Nor real Google Calendar: an "Add to Google Calendar" link that's followed, in any tab, goes nowhere.
+  await page.context().route("https://calendar.google.com/**", (route) => route.abort("blockedbyclient"))
   if (week !== "already faked") await fakeWeek(page, week)
   await page.goto("/")
   // Ctrl+K does nothing until React has hydrated, which is also when the shortcut label gets its text.

@@ -11,6 +11,7 @@ import type { Card, Preview } from "@/lib/agent/plans"
 import type { Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
 import { localDateTime } from "@/lib/time"
+import { AddToCalendar } from "./calendar-link"
 import { CheckIcon, SparkleIcon } from "./icons"
 import { fieldRow, fieldText } from "./styles"
 import { isAction, type ActionPart, type Agent } from "./use-agent"
@@ -165,6 +166,9 @@ function PreviewCard({ part, preview, refusal, active, onAnswer }: PreviewCardPr
   const { category } = shownOn(preview)
   // Saying yes is the dark button, twice as wide; cancelling is red.
   const approve = preview.action === "cancel" ? "bg-danger text-on-danger" : "bg-strong text-on-strong"
+  // Once the server has saved the reminder, it can go to Google Calendar too, unless it was cancelled. A card still
+  // waiting for your OK has nothing saved yet.
+  const saved = part.state === "output-available" && part.output.reminder.status !== "cancelled" ? part.output.reminder : undefined
 
   return (
     <section aria-label={words.heading} data-status={status} data-category={category} className="data-[status=declined]:opacity-60">
@@ -192,10 +196,13 @@ function PreviewCard({ part, preview, refusal, active, onAnswer }: PreviewCardPr
         <div className="text-[14px] font-semibold empty:hidden">
           {status === "working" && <p>{words.working}</p>}
           {status === "done" && (
-            <p className="flex items-center gap-1.5">
-              <CheckIcon className="size-3.5" />
-              {words.done}
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5">
+                <CheckIcon className="size-3.5" />
+                {words.done}
+              </p>
+              {saved && <AddToCalendar reminder={saved} />}
+            </div>
           )}
           {status === "declined" && <p>{words.declined}</p>}
         </div>

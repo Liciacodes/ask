@@ -12,6 +12,7 @@ import { CategoryDot, CategoryIcon, categoryName } from "@/components/week/categ
 import { CATEGORIES, guessCategory, type Category } from "@/lib/categories"
 import type { ReminderJson } from "@/lib/reminders"
 import { localDateTime } from "@/lib/time"
+import { AddToCalendar } from "./calendar-link"
 import { CheckIcon } from "./icons"
 
 type Problems = { title?: string; when?: string; note?: string; form?: string }
@@ -229,6 +230,8 @@ function ReminderForm({ editing, onSaved, onDeleted }: ReminderFormProps) {
           </FieldError>
         )}
       </Field>
+      {/* The reminder as it's saved, not as the form shows it: a change goes to Google only once it's saved here. */}
+      {editing && <AddToCalendar reminder={editing} className="self-start" />}
       <div className="flex items-center justify-end gap-4">
         {problems.form && (
           <p role="alert" data-problem="" className="mr-auto text-[13px] font-semibold text-error">

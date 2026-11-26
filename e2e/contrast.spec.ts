@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
-import { fakeAgent, proposes, says, turn } from "./fake-agent"
+import { did, fakeAgent, proposes, says, turn } from "./fake-agent"
 import { bar, fakeMe, fakeSave, goHome, openBar, openForm, reminder, status, title } from "./helpers"
 
 // Every word on the main screens, light and dark, reads at 4.5:1 against what's behind it (3:1 for large text, and
@@ -214,6 +214,25 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expectReadable(page, "[data-dashed]")
     })
 
+    test("a reminder the AI saved, with its Add to Google Calendar link on the soft grey card", async ({ page }) => {
+      const card = { title: "Call Ada", description: null, date: "2026-11-20", time: "18:00", category: "call" } as const
+      const saved = reminder("Call Ada", "2026-11-20T17:00:00.000Z", { category: "call" })
+      await fakeAgent(
+        page,
+        turn(proposes("createReminder", { title: "Call Ada", date: "2026-11-20", time: "18:00", category: "call" }, { action: "create", reminder: card })),
+        turn(did("create", saved))
+      )
+      await goHome(page)
+      await openBar(page)
+      await page.keyboard.type("call ada friday at 6pm")
+      await page.keyboard.press("Enter")
+      await expect(bar(page).getByRole("button", { name: "Save", exact: true })).toBeVisible()
+      await page.keyboard.press("Enter")
+
+      await expect(bar(page).getByRole("link", { name: /^Add to Google Calendar/ })).toBeVisible()
+      await expectReadable(page)
+    })
+
     test("a cancel waiting for your OK, with its red Cancel reminder button on the soft grey card", async ({ page }) => {
       const dentist = reminder("Dentist", "2026-11-19T08:00:00.000Z", { category: "health" })
       const card = { title: "Dentist", description: null, date: "2026-11-19", time: "09:00", category: "health" } as const
@@ -227,11 +246,12 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expectReadable(page)
     })
 
-    test("a reminder opened to edit, with its red Delete reminder button", async ({ page }) => {
+    test("a reminder opened to edit, with its Add to Google Calendar link and red Delete reminder button", async ({ page }) => {
       await goHome(page, [reminder("Dentist", "2026-11-19T08:00:00.000Z", { description: "Bring the forms" })])
       await page.getByRole("option", { name: /^Dentist/ }).click()
 
       await expect(bar(page).getByRole("button", { name: "Delete reminder" })).toBeVisible()
+      await expect(bar(page).getByRole("link", { name: /^Add to Google Calendar/ })).toBeVisible()
       await expectReadable(page)
     })
 
