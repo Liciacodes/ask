@@ -28,12 +28,32 @@ describe("POST /api/reminders", () => {
       due_at: `${nextYear}-03-10T08:00:00.000Z`,
       timezone: "Africa/Lagos",
       status: "pending",
+      category: "shopping",
       sent_at: null,
       created_at: expect.any(String),
     })
     const saved = await db.reminder.findUniqueOrThrow({ where: { id: body.id } })
     expect(saved.userId).toBe(TEST_VISITOR)
     expect(saved.dueAt.toISOString()).toBe(`${nextYear}-03-10T08:00:00.000Z`)
+  })
+
+  test("a category it's sent is kept; left out, it's guessed from the title", async () => {
+    const chosen = await (await create({ ...valid, title: "Buy milk", category: "food" })).json()
+    const guessed = await (await create({ ...valid, title: "Call the bank" })).json()
+    const unknown = await (await create({ ...valid, title: "Pay rent" })).json()
+
+    expect([chosen.category, guessed.category, unknown.category]).toEqual(["food", "call", "other"])
+    expect((await db.reminder.findUniqueOrThrow({ where: { id: chosen.id } })).category).toBe("food")
+  })
+
+  test("refuses a category that isn't on the list and saves nothing", async () => {
+    const response = await create({ ...valid, category: "errands" })
+
+    expect(response.status).toBe(400)
+    expect((await response.json()).issues).toEqual([
+      { field: "category", message: "Category must be one of: work, health, call, message, food, travel, exercise, shopping, hobby, other" },
+    ])
+    expect(await db.reminder.count()).toBe(0)
   })
 
   test("keeps an optional description and trims spaces", async () => {
@@ -89,6 +109,17 @@ describe("PATCH /api/reminders/:id", () => {
     })
     const saved = await db.reminder.findUniqueOrThrow({ where: { id: reminder.id } })
     expect(saved.title).toBe("Buy oat milk")
+  })
+
+  test("changes the category, and refuses one that isn't on the list", async () => {
+    const reminder = await saveReminder()
+
+    const changed = await change(reminder.id, { category: "health" })
+    const refused = await change(reminder.id, { category: "errands" })
+
+    expect((await changed.json()).category).toBe("health")
+    expect(refused.status).toBe(400)
+    expect((await db.reminder.findUniqueOrThrow({ where: { id: reminder.id } })).category).toBe("health")
   })
 
   test("changes only what it's sent", async () => {

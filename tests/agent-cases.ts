@@ -1,8 +1,9 @@
-// Thirty-two sentences someone might type to Ask, each with the answer we expect.
+// Forty-two sentences someone might type to Ask, each with the answer we expect.
 // `npm run test:api` sends each expected answer through the server, with a scripted model, and checks what the
 // person would see. `npm run test:live` asks the real model each sentence and checks it gives that answer.
 
 import type { Reason } from "@/lib/agent/not-understood"
+import type { Category } from "@/lib/categories"
 
 type Tool = "createReminder" | "changeReminder" | "cancelReminder" | "restoreReminder"
 
@@ -11,12 +12,13 @@ type Saved = { title: string; date: string; time: string; status?: "pending" | "
 
 type Expected =
   // A preview card for a new reminder. `savedAt` is the moment it's saved once approved; `has` holds words the
-  // real model's title and details must contain, since it may word them its own way.
+  // real model's title and details must contain, since it may word them its own way. Where more than one category
+  // is fair, `has.categories` lists each one the real model may pick.
   | {
       does: "create"
-      reminder: { title: string; description?: string; date: string; time: string }
+      reminder: { title: string; description?: string; date: string; time: string; category: Category }
       savedAt: string
-      has: { title: string; description?: string }
+      has: { title: string; description?: string; categories?: Category[] }
     }
   // A preview card changing one of the saved reminders, found by its title. `input` is what a good answer sends;
   // `after` is what the card shows. Only a rename may change the title, so it has `has` too.
@@ -28,8 +30,11 @@ type Expected =
   | { does: "ask"; says: string }
   // No card at all. If a model tries anyway, the server turns it down with `reason`.
   | { does: "refuse"; says: string; tries?: { tool: Tool; input: Record<string, string>; on?: string; reason: string } }
-  // Not an action, a question or a list: the model calls didNotUnderstand, and the bar says what to try.
-  | { does: "notUnderstood"; reason: Reason }
+  // Not an action, a question or a list: the model calls didNotUnderstand, and the bar says what to try. With a date
+  // or time in the message, the first one is turned down and the model is `askedAgain`; the second one stands. Where
+  // asking again may fairly bring a question offering a reminder instead, the real model may answer with that
+  // (`orOffersReminder`).
+  | { does: "notUnderstood"; reason: Reason; askedAgain?: true; orOffersReminder?: true }
 
 type AgentCase = { say: string; now: string; timezone: string; saved?: Saved[]; expect: Expected }
 
@@ -44,73 +49,78 @@ const agentCases: AgentCase[] = [
     say: "Remind me to call Tobi tomorrow at 6pm",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Call Tobi", date: "2026-11-19", time: "18:00" }, savedAt: "2026-11-19T17:00:00.000Z", has: { title: "tobi" } },
+    expect: { does: "create", reminder: { title: "Call Tobi", date: "2026-11-19", time: "18:00", category: "call" }, savedAt: "2026-11-19T17:00:00.000Z", has: { title: "tobi" } },
   },
   {
     // This came back as Friday 20 November before the model was given a calendar.
     say: "go for a run on Saturday at 7am",
     now: EVENING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Go for a run", date: "2026-11-21", time: "07:00" }, savedAt: "2026-11-21T06:00:00.000Z", has: { title: "run" } },
+    expect: { does: "create", reminder: { title: "Go for a run", date: "2026-11-21", time: "07:00", category: "exercise" }, savedAt: "2026-11-21T06:00:00.000Z", has: { title: "run" } },
   },
   {
     say: "dentist this Friday at 9am",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Dentist", date: "2026-11-20", time: "09:00" }, savedAt: "2026-11-20T08:00:00.000Z", has: { title: "dentist" } },
+    expect: { does: "create", reminder: { title: "Dentist", date: "2026-11-20", time: "09:00", category: "health" }, savedAt: "2026-11-20T08:00:00.000Z", has: { title: "dentist" } },
   },
   {
     say: "remind me in 2 hours to take my medicine",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Take my medicine", date: "2026-11-18", time: "12:20" }, savedAt: "2026-11-18T11:20:00.000Z", has: { title: "medicine" } },
+    expect: { does: "create", reminder: { title: "Take my medicine", date: "2026-11-18", time: "12:20", category: "health" }, savedAt: "2026-11-18T11:20:00.000Z", has: { title: "medicine" } },
   },
   {
     // The next 1st is 1 December. The card is the question: this once came back as "Do you want…?" in words.
     say: "pay rent on the 1st at 9am",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Pay rent", date: "2026-12-01", time: "09:00" }, savedAt: "2026-12-01T08:00:00.000Z", has: { title: "rent" } },
+    expect: {
+      does: "create",
+      reminder: { title: "Pay rent", date: "2026-12-01", time: "09:00", category: "other" },
+      savedAt: "2026-12-01T08:00:00.000Z",
+      has: { title: "rent", categories: ["other", "shopping"] },
+    },
   },
   {
     say: "submit the report on Monday at noon",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Submit the report", date: "2026-11-23", time: "12:00" }, savedAt: "2026-11-23T11:00:00.000Z", has: { title: "report" } },
+    expect: { does: "create", reminder: { title: "Submit the report", date: "2026-11-23", time: "12:00", category: "work" }, savedAt: "2026-11-23T11:00:00.000Z", has: { title: "report" } },
   },
   {
     say: "call the bank tonight at 8",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Call the bank", date: "2026-11-18", time: "20:00" }, savedAt: "2026-11-18T19:00:00.000Z", has: { title: "bank" } },
+    expect: { does: "create", reminder: { title: "Call the bank", date: "2026-11-18", time: "20:00", category: "call" }, savedAt: "2026-11-18T19:00:00.000Z", has: { title: "bank" } },
   },
   {
     // 8am has passed today, so the next 8am is tomorrow, without asking.
     say: "remind me at 8am to take my vitamins",
     now: EVENING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Take my vitamins", date: "2026-11-19", time: "08:00" }, savedAt: "2026-11-19T07:00:00.000Z", has: { title: "vitamin" } },
+    expect: { does: "create", reminder: { title: "Take my vitamins", date: "2026-11-19", time: "08:00", category: "health" }, savedAt: "2026-11-19T07:00:00.000Z", has: { title: "vitamin" } },
   },
   {
     // Past the end of the model's 14-day calendar, which is a lookup, not a limit: it once said it couldn't go past 1 December.
     say: "book flights on 3 December at 10am",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Book flights", date: "2026-12-03", time: "10:00" }, savedAt: "2026-12-03T09:00:00.000Z", has: { title: "flight" } },
+    expect: { does: "create", reminder: { title: "Book flights", date: "2026-12-03", time: "10:00", category: "travel" }, savedAt: "2026-12-03T09:00:00.000Z", has: { title: "flight" } },
   },
   {
     // Someone in London: the same words, on their clock.
     say: "call grandma on Sunday at 4pm",
     now: "2026-11-18T09:20:00Z",
     timezone: "Europe/London",
-    expect: { does: "create", reminder: { title: "Call grandma", date: "2026-11-22", time: "16:00" }, savedAt: "2026-11-22T16:00:00.000Z", has: { title: "grandma" } },
+    expect: { does: "create", reminder: { title: "Call grandma", date: "2026-11-22", time: "16:00", category: "call" }, savedAt: "2026-11-22T16:00:00.000Z", has: { title: "grandma" } },
   },
   {
     // Ten minutes before midnight, tomorrow is still Thursday.
     say: "remind me tomorrow at 9am to send the invoice",
     now: "2026-11-18T23:50:00+01:00",
     timezone: LAGOS,
-    expect: { does: "create", reminder: { title: "Send the invoice", date: "2026-11-19", time: "09:00" }, savedAt: "2026-11-19T08:00:00.000Z", has: { title: "invoice" } },
+    expect: { does: "create", reminder: { title: "Send the invoice", date: "2026-11-19", time: "09:00", category: "work" }, savedAt: "2026-11-19T08:00:00.000Z", has: { title: "invoice" } },
   },
   {
     // A plain Friday is the coming one: only "next Friday" is asked about.
@@ -119,9 +129,117 @@ const agentCases: AgentCase[] = [
     timezone: LAGOS,
     expect: {
       does: "create",
-      reminder: { title: "Call dad", description: "Ask him about his trip", date: "2026-11-20", time: "18:00" },
+      reminder: { title: "Call dad", description: "Ask him about his trip", date: "2026-11-20", time: "18:00", category: "call" },
       savedAt: "2026-11-20T17:00:00.000Z",
       has: { title: "dad", description: "trip" },
+    },
+  },
+  // Categories from words the category's description doesn't give as examples.
+  {
+    say: "Dentist appointment Thursday 9am",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "Dentist appointment", date: "2026-11-19", time: "09:00", category: "health" },
+      savedAt: "2026-11-19T08:00:00.000Z",
+      has: { title: "dentist" },
+    },
+  },
+  {
+    say: "Standup with the team Monday 10am",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "Standup with the team", date: "2026-11-23", time: "10:00", category: "work" },
+      savedAt: "2026-11-23T09:00:00.000Z",
+      has: { title: "stand" },
+    },
+  },
+  {
+    say: "Reply to Ada's email tonight at 8",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "Reply to Ada's email", date: "2026-11-18", time: "20:00", category: "message" },
+      savedAt: "2026-11-18T19:00:00.000Z",
+      has: { title: "ada" },
+    },
+  },
+  {
+    say: "Yoga Saturday 7am",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: { does: "create", reminder: { title: "Yoga", date: "2026-11-21", time: "07:00", category: "exercise" }, savedAt: "2026-11-21T06:00:00.000Z", has: { title: "yoga" } },
+  },
+  {
+    // With a time: on its own, "on Friday" leaves the time missing, and Ask asks for it.
+    say: "Buy a birthday gift for Ken on Friday at 5pm",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "Buy a birthday gift for Ken", date: "2026-11-20", time: "17:00", category: "shopping" },
+      savedAt: "2026-11-20T16:00:00.000Z",
+      has: { title: "gift" },
+    },
+  },
+  // Tasks Ask can't do itself are still reminders, with words no instruction or description gives as examples.
+  {
+    say: "Book a table for dinner Friday at 7pm",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "Book a table for dinner", date: "2026-11-20", time: "19:00", category: "food" },
+      savedAt: "2026-11-20T18:00:00.000Z",
+      has: { title: "table" },
+    },
+  },
+  {
+    say: "Order a cake for Saturday at 2pm",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "Order a cake", date: "2026-11-21", time: "14:00", category: "food" },
+      savedAt: "2026-11-21T13:00:00.000Z",
+      has: { title: "cake", categories: ["food", "shopping"] },
+    },
+  },
+  {
+    say: "Text Kemi happy birthday Sunday at 9am",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "Text Kemi happy birthday", date: "2026-11-22", time: "09:00", category: "message" },
+      savedAt: "2026-11-22T08:00:00.000Z",
+      has: { title: "kemi" },
+    },
+  },
+  {
+    say: "WhatsApp Tunde about the party tomorrow at 6pm",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "WhatsApp Tunde about the party", date: "2026-11-19", time: "18:00", category: "message" },
+      savedAt: "2026-11-19T17:00:00.000Z",
+      has: { title: "tunde" },
+    },
+  },
+  {
+    say: "Send Tobi a WhatsApp at 7pm tomorrow",
+    now: MORNING,
+    timezone: LAGOS,
+    expect: {
+      does: "create",
+      reminder: { title: "Send Tobi a WhatsApp", date: "2026-11-19", time: "19:00", category: "message" },
+      savedAt: "2026-11-19T18:00:00.000Z",
+      has: { title: "tobi" },
     },
   },
 
@@ -273,7 +391,7 @@ const agentCases: AgentCase[] = [
     expect: {
       does: "refuse",
       says: "That time has passed. When should I remind you?",
-      tries: { tool: "createReminder", input: { title: "Text Ada", date: "2026-11-17", time: "17:00" }, reason: "Pick a time in the future" },
+      tries: { tool: "createReminder", input: { title: "Text Ada", date: "2026-11-17", time: "17:00", category: "message" }, reason: "Pick a time in the future" },
     },
   },
   {
@@ -299,7 +417,9 @@ const agentCases: AgentCase[] = [
     say: "what's the weather tomorrow?",
     now: MORNING,
     timezone: LAGOS,
-    expect: { does: "notUnderstood", reason: "off-topic" },
+    // Asked again, the real model offered "What time tomorrow would you like to be reminded to check the weather?"
+    // in 2 of 2 runs. Friendly, and Ask is a reminder app, so that's fine too.
+    expect: { does: "notUnderstood", reason: "off-topic", askedAgain: true, orOffersReminder: true },
   },
   {
     say: "do the thing",

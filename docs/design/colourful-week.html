@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ask, colourful week, brighter</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F5FF}
+a{color:#5145E5}a:hover{color:#3A2FBF}
+.askin::placeholder{color:#1B1A2E;opacity:1}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.ask{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);width:min(600px,calc(100% - 32px))}
+@media (max-width:860px){.ask{position:static;transform:none;width:auto;margin:20px 16px 0}}
+</style>
+</helmet>
+<div style="position: relative; min-height: 1040px; box-sizing: border-box; background: #F6F5FF; color: #1B1A2E; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; padding: 24px 16px 220px">
+  <div style="max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+    <header style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+      <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px">
+        <span aria-hidden="true" style="width: 40px; height: 40px; border-radius: 12px; background: {{accent}}; color: #FFFFFF; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 3v4M16 3v4"></path></svg></span>
+        <h1 style="margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.02em">November 2026</h1>
+        <div style="display: flex; gap: 6px">
+          <button type="button" aria-label="Previous week" style="width: 44px; height: 44px; display: grid; place-items: center; background: #FFFFFF; border: 1px solid #E6E3FA; border-radius: 12px; color: #1B1A2E; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg></button>
+          <button type="button" style="min-height: 44px; padding: 0 16px; background: #FFFFFF; border: 1px solid #E6E3FA; border-radius: 12px; color: #1B1A2E; font: 700 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer">Today</button>
+          <button type="button" aria-label="Next week" style="width: 44px; height: 44px; display: grid; place-items: center; background: #FFFFFF; border: 1px solid #E6E3FA; border-radius: 12px; color: #1B1A2E; cursor: pointer"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"></path></svg></button>
+        </div>
+      </div>
+      <button type="button" style="display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 8px 0 16px; background: {{accent}}; border: 0; border-radius: 999px; color: #FFFFFF; font: 700 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path></svg>Ask anything<kbd style="font: 700 12px 'Plus Jakarta Sans', sans-serif; background: rgba(255, 255, 255, 0.2); border-radius: 999px; padding: 4px 10px">Ctrl K</kbd></button>
+    </header>
+    <div style="background: #FFFFFF; border: 1px solid #ECEAFB; border-radius: 24px; box-shadow: 0 12px 32px rgba(60, 50, 160, 0.08); padding: 8px 8px 16px">
+      <div style="overflow-x: auto">
+        <div style="min-width: 980px">
+          <div style="display: grid; grid-template-columns: 64px repeat(7, minmax(0, 1fr)); padding: 12px 0 10px">
+            <span></span>
+            <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+                <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: {{d.dowColor}}">{{d.dow}}</span>
+                <span style="{{d.numStyle}}">{{d.num}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: grid; grid-template-columns: 64px repeat(7, minmax(0, 1fr))">
+            <div style="position: relative; height: 720px">
+              <sc-for list="{{hours}}" as="h" hint-placeholder-count="15">
+                <span style="position: absolute; right: 10px; top: {{h.top}}; transform: translateY(-50%); font-size: 11px; font-weight: 600; color: #6B6890; white-space: nowrap">{{h.label}}</span>
+              </sc-for>
+            </div>
+            <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+              <div style="{{d.colStyle}}">
+                <sc-for list="{{d.items}}" as="r" hint-placeholder-count="1">
+                  <div style="{{r.style}}">
+                    <span aria-hidden="true" style="flex-shrink: 0; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: {{r.tile}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="{{r.icon}}"></path></svg></span>
+                    <span style="min-width: 0; display: flex; flex-direction: column">
+                      <span style="font-size: 13px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.title}}</span>
+                      <span style="font-size: 11px; font-weight: 600; opacity: 0.85">{{r.time}}</span>
+                    </span>
+                  </div>
+                </sc-for>
+                <sc-if value="{{d.today}}" hint-placeholder-val="{{false}}">
+                  <div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: {{nowTop}}; height: 2px; background: #E5484D">
+                    <span style="position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: #E5484D; display: block"></span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <sc-if value="{{showAsk}}" hint-placeholder-val="{{true}}">
+    <div class="ask" role="dialog" aria-label="Ask" style="background: #FFFFFF; border: 1px solid #E6E3FA; border-radius: 24px; box-shadow: 0 28px 64px rgba(40, 30, 120, 0.22); padding: 12px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: center; gap: 12px; padding: 0 8px">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path></svg>
+        <label for="ask-b2" class="sr">Ask</label>
+        <input id="ask-b2" class="askin" type="text" placeholder="remind me to call Dad on Friday at 6pm" style="flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: #1B1A2E; font: 600 16px 'Plus Jakarta Sans', sans-serif; min-height: 48px">
+      </div>
+      <div style="background: #DFF4FB; color: #0B5F7A; border-radius: 18px; padding: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 12px; background: #B9E6F5; display: grid; place-items: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.8.7a2 2 0 0 1 1.7 2z"></path></svg></span>
+          <div style="display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em">New reminder</span>
+            <span style="font-size: 20px; font-weight: 800; color: #08455A">Call Dad</span>
+            <span style="font-size: 14px; font-weight: 600">Friday 27 Nov · 6:00 PM</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px">
+          <button type="button" style="min-height: 44px; padding: 0 16px; background: #FFFFFF; border: 0; border-radius: 999px; color: #1B1A2E; font: 700 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer">Cancel</button>
+          <button type="button" style="min-height: 44px; padding: 0 20px; background: {{accent}}; border: 0; border-radius: 999px; color: #FFFFFF; font: 700 14px 'Plus Jakarta Sans', sans-serif; cursor: pointer">Save</button>
+        </div>
+      </div>
+      <p style="margin: 0; padding: 0 8px 2px; font-size: 12px; font-weight: 600; color: #6B6890">Enter to save · Esc to cancel · the dashed card on Friday shows where it will go</p>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#5145E5","options":["#5145E5","#7C3AED","#0F766E"]},"showAsk":{"editor":"boolean","default":true},"$preview":{"width":1280,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#5145E5';
+    const showAsk = this.props.showAsk ?? true;
+    const ROW = 48;
+    const START = 8;
+    const icons = {
+      work: 'M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
+      health: 'M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z',
+      food: 'M5 3v7a2 2 0 0 0 2 2 2 2 0 0 0 2-2V3M7 12v9M17 3c-2 2-2.5 6 0 8v10',
+      travel: 'M3 13l2-6h14l2 6v5H3zM7 18v2M17 18v2M3 13h18',
+      music: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
+      sport: 'M22 12h-4l-3 9L9 3l-3 9H2',
+      shopping: 'M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0',
+      people: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+      call: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.8.7a2 2 0 0 1 1.7 2z'
+    };
+    const cats = {
+      work: { bg: accent, fg: '#FFFFFF', tile: 'rgba(255,255,255,0.22)' },
+      health: { bg: '#F1E0FB', fg: '#5E2390', tile: '#E2C4F7' },
+      food: { bg: '#FFEFC7', fg: '#734600', tile: '#FFE09A' },
+      travel: { bg: '#FFE1DA', fg: '#962D12', tile: '#FFC8BA' },
+      music: { bg: '#DDE6FF', fg: '#2A47AE', tile: '#C4D3FF' },
+      sport: { bg: '#D9F3E6', fg: '#0E6640', tile: '#B6E8CF' },
+      shopping: { bg: '#FCE4F1', fg: '#97174C', tile: '#F8C9E2' },
+      people: { bg: '#DFF4FB', fg: '#0A5C76', tile: '#B9E6F5' },
+      call: { bg: '#DFF4FB', fg: '#0A5C76', tile: '#B9E6F5' }
+    };
+    const raw = [
+      { dow: 'Mon', num: '23', today: true, items: [
+        { h: 10, m: 0, time: '10:00 AM', title: 'Team meeting', cat: 'work' },
+        { h: 17, m: 0, time: '5:00 PM', title: 'Call dad', cat: 'call' },
+        { h: 21, m: 0, time: '9:00 PM', title: 'Text Anna', cat: 'people' }
+      ] },
+      { dow: 'Tue', num: '24', items: [
+        { h: 19, m: 0, time: '7:00 PM', title: 'Message Ak', cat: 'people' }
+      ] },
+      { dow: 'Wed', num: '25', items: [
+        { h: 18, m: 0, time: '6:00 PM', title: 'Gym', cat: 'sport' }
+      ] },
+      { dow: 'Thu', num: '26', items: [
+        { h: 9, m: 0, time: '9:00 AM', title: 'Dentist', cat: 'health' },
+        { h: 19, m: 0, time: '7:00 PM', title: 'Message Ak', cat: 'people' }
+      ] },
+      { dow: 'Fri', num: '27', items: [
+        { h: 13, m: 0, time: '1:00 PM', title: 'Lunch with Ada', cat: 'food' },
+        { h: 15, m: 30, time: '3:30 PM', title: 'Pick up Tobi', cat: 'travel' },
+        { h: 18, m: 0, time: '6:00 PM', title: 'Call Dad', cat: 'call', proposed: true }
+      ] },
+      { dow: 'Sat', num: '28', items: [
+        { h: 9, m: 0, time: '9:00 AM', title: 'Grocery shopping', cat: 'shopping' }
+      ] },
+      { dow: 'Sun', num: '29', items: [
+        { h: 16, m: 0, time: '4:00 PM', title: 'Piano practice', cat: 'music' }
+      ] }
+    ];
+    const lines = 'background-image: repeating-linear-gradient(to bottom, #EFEDFB 0, #EFEDFB 1px, transparent 1px, transparent ' + ROW + 'px)';
+    const days = raw.map((d) => ({
+      dow: d.dow,
+      num: d.num,
+      today: !!d.today,
+      dowColor: d.today ? accent : '#6B6890',
+      numStyle: d.today
+        ? 'width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: ' + accent + '; color: #FFFFFF; font-size: 17px; font-weight: 800'
+        : 'width: 36px; height: 36px; display: grid; place-items: center; color: #1B1A2E; font-size: 17px; font-weight: 800',
+      colStyle: 'position: relative; height: ' + (ROW * 15) + 'px; border-left: 1px solid #F0EEFB; ' + lines + (d.today ? '; background-color: #FAF9FF' : ''),
+      items: (d.items || []).map((r) => {
+        const c = cats[r.cat];
+        const top = ((r.h - START) + r.m / 60) * ROW + 2;
+        const base = 'position: absolute; left: 4px; right: 4px; top: ' + top + 'px; height: ' + (ROW - 4) + 'px; box-sizing: border-box; border-radius: 12px; padding: 6px 8px; display: flex; align-items: center; gap: 8px; color: ' + c.fg + '; ';
+        return {
+          title: r.title,
+          time: r.proposed ? r.time + ' · not saved' : r.time,
+          icon: icons[r.cat],
+          tile: c.tile,
+          style: r.proposed
+            ? base + 'background: #FFFFFF; border: 2px dashed ' + c.fg
+            : base + 'background: ' + c.bg + (r.cat === 'work' ? '; box-shadow: 0 6px 16px rgba(81, 69, 229, 0.25)' : '')
+        };
+      })
+    }));
+    const hours = [];
+    for (let h = START; h < START + 15; h++) {
+      const label = h === 12 ? '12 PM' : h > 12 ? (h - 12) + ' PM' : h + ' AM';
+      hours.push({ label, top: ((h - START) * ROW) + 'px' });
+    }
+    const nowTop = ((19 - START) * ROW) + 'px';
+    return { accent, showAsk, days, hours, nowTop };
+  }
+}
+</script>
+</body>
+</html>

@@ -92,4 +92,12 @@ function AskIcon(props: IconProps) {
   )
 }
 
-export { AskIcon, BellIcon, CalendarIcon, CheckIcon, NoteAddIcon, NotesIcon, SearchIcon, CalendarAddIcon }
+function SparkleIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M8 3.25 9.3 6.7 12.75 8 9.3 9.3 8 12.75 6.7 9.3 3.25 8 6.7 6.7Z" />
+    </Icon>
+  )
+}
+
+export { AskIcon, BellIcon, CalendarIcon, CheckIcon, NoteAddIcon, NotesIcon, SearchIcon, SparkleIcon, CalendarAddIcon }

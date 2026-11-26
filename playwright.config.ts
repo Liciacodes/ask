@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test"
+import { FAKE_GOOGLE_ENV } from "./scripts/fake-google.mjs"
 
 const ci = Boolean(process.env.CI)
 // The browser tests always get a server of their own, on a port of their own: never your dev server, which has
@@ -24,6 +25,7 @@ export default defineConfig({
     timeout: 240_000,
     // No Groq key: empty, so Next can't fill it in from .env.local. Every page also blocks /api/agent unless the test
     // fakes it (e2e/helpers.ts), so no browser test reaches the agent route at all.
-    env: { GROQ_API_KEY: "" },
+    // Google sign-in points at the fake, with fake credentials, so the real ones in .env.local are never loaded.
+    env: { GROQ_API_KEY: "", ...FAKE_GOOGLE_ENV },
   },
 })

@@ -24,8 +24,10 @@ type WeekBoardOptions = {
   onListsChange?: (lists: TransferLists, details: MoveDetails) => void
   // Whether a day takes the card: never a day that has passed.
   accepts?: (key: string, day: string) => boolean
-  // Whether a card can't be picked up, like one already sent, or one whose move is still saving.
+  // Whether a card can't be picked up, like one already sent, or one whose move is still saving. It doesn't open either.
   locked?: (key: string) => boolean
+  // A click on a card, or Enter on it, opens it to edit.
+  open?: (key: string) => void
   // What screen readers call a card and a day, and what they hear as a card moves.
   label?: (key: string) => string | undefined
   dayLabel?: (day: string) => string | undefined
@@ -43,6 +45,7 @@ const weekBoard = definePrimitive({
     onListsChange: "callback",
     accepts: "action",
     locked: "action",
+    open: "action",
     label: "action",
     dayLabel: "action",
     message: "action",
@@ -73,8 +76,33 @@ const weekBoard = definePrimitive({
     // columns, and up and down when they stack on a phone.
     const roving = createRovingFocus(context, { slot: "card", key: "focused", move: spatialMove() })
 
+    const open = (key: string) => {
+      if (!locked(key)) context.options().open?.(key)
+    }
+
     const keydown = (event: KeyboardEvent, key: string, el: HTMLElement) => {
-      if (context.store.get().moving && WITHIN_A_DAY.has(event.key)) return event.preventDefault()
+      const moving = context.store.get().moving
+      if (moving && WITHIN_A_DAY.has(event.key)) return event.preventDefault()
+      // Enter opens a card; Space picks it up. While one is picked up, Enter still drops it.
+      if (!moving && event.key === "Enter" && !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)) {
+        event.preventDefault()
+        return open(key)
+      }
+      // Tab puts a picked-up card back and moves on. Putting it back re-mounts the card in its own day, and if that
+      // happens while it still has focus, roving focus pulls focus back to it once Tab has left the page. So let Tab
+      // move focus first, then put the card back.
+      // The arrow key that moved the card also left focus repairs waiting on a timer. They act when focus is on
+      // <body>, which is where Tab out of the page leaves it, so one can pull focus back onto the card after Tab.
+      // They were queued before this timer, so they've all run by now: if the card has focus again, Tab meant to
+      // leave it, and it lets go before going back.
+      if (moving && event.key === "Tab") {
+        setTimeout(() => {
+          if (context.store.get().moving !== moving) return
+          if (el.ownerDocument.activeElement === el) el.blur()
+          transfer.keydown(event, key)
+        })
+        return
+      }
       if (!transfer.keydown(event, key)) roving.keydown(event, el)
     }
 
@@ -82,6 +110,7 @@ const weekBoard = definePrimitive({
       transfer,
       roving,
       locked,
+      open,
       keydown,
       // While a card is picked up, the days that won't take it.
       refuses: (state: { moving: TransferDraft | null }, day: string) => state.moving !== null && !accepts(state.moving.key, day),
@@ -105,7 +134,7 @@ const weekBoard = definePrimitive({
       role: "option",
       focus: "roving",
       keys: ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", " ", "Enter", "Escape", "Tab"],
-      press: { none: "Space and Enter pick the card up, in keydown. A click alone does nothing: a drag starts once it moves." },
+      press: { none: "Space picks the card up and Enter opens it, in keydown. A click opens it; a drag starts once it moves, and UI SDK swallows the click that follows a drag." },
       props: { value: "string" },
       attrs: (state, part) => ({
         tabindex: part.api.roving.tabIndex(state, part),
@@ -118,6 +147,7 @@ const weekBoard = definePrimitive({
           if (el) api.keydown(event as KeyboardEvent, key, el)
         },
         pointerdown: (event, { api, key }) => api.transfer.pointerdown(event, key),
+        click: (_event, { api, key }) => api.open(key),
       },
       bind: (el, part) => {
         const leave = [part.api.roving.bind(el, part), part.api.transfer.bindItem(el, part.key)]

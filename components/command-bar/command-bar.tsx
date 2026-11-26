@@ -1,19 +1,21 @@
 "use client"
 
 import { createParts } from "@ui-sdk/react/primitive"
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react"
 import type { ReminderJson } from "@/lib/reminders"
 import { commands, type Command } from "./commands"
 import { Conversation, wording } from "./conversation"
-import { AskIcon, BellIcon, SearchIcon } from "./icons"
+import { AskIcon, BellIcon, SparkleIcon } from "./icons"
 import { ASK, commandBar, createCommandBarController } from "./primitive"
 import { ReminderForm } from "./reminder-form"
-import { useAgent, type Agent, type Done } from "./use-agent"
+import { fieldRow, fieldText } from "./styles"
+import { useAgent, type Agent, type Done, type Proposal } from "./use-agent"
 import { playSwap, snapshot, type Snapshot } from "./view-swap"
 
 const parts = createParts(commandBar, {
   root: "div",
   shortcut: "kbd",
+  trigger: "button",
   backdrop: "div",
   content: "div",
   title: "h2",
@@ -25,7 +27,7 @@ const parts = createParts(commandBar, {
 })
 
 const keycap =
-  "inline-grid min-w-5 place-items-center rounded-[4px] border border-b-2 border-rule bg-card px-1.5 py-1 font-sans text-[11.5px] leading-none font-medium text-ink"
+  "inline-grid min-w-5 place-items-center rounded-md border border-b-2 border-line bg-surface px-1.5 py-1 font-sans text-[11.5px] leading-none font-bold text-ink"
 
 type Hint = readonly [keys: readonly string[], action: string]
 
@@ -44,13 +46,15 @@ const hints = {
 
 type View = keyof typeof hints | "conversation"
 
-// What Enter and Esc do right now in the conversation. Nothing while an action you approved is running.
-function conversationHints(agent: Agent): Hint[] {
+// What Enter and Esc do right now in the conversation, and where the week shows the card. Nothing while an action
+// you approved is running.
+function conversationHints(agent: Agent, dashedHint: string | undefined): Hint[] {
   if (agent.waiting) {
     const words = wording[agent.waiting.preview.action]
     return [
       [["↵"], words.approve.toLowerCase()],
       [["esc"], words.decline.toLowerCase()],
+      ...(dashedHint ? [[[], dashedHint] as const] : []),
     ]
   }
   if (agent.saving) return []
@@ -67,16 +71,57 @@ type CommandBarProps = {
   // An action you approved in a conversation, once the server has carried it out.
   onAgentDone?: (done: Done) => void
   onChoose?: (command: Command) => void
+  // The action waiting on a card in the open conversation, or saving after your yes; null when there's none.
+  onProposal?: (proposal: Proposal | null) => void
+  onOpenChange?: (open: boolean) => void
+  // Where the week shows the waiting card, for the hint line, like "the dashed card on Friday shows where it will go".
+  dashedHint?: string
+  // A reminder opened from the week and saved with "Save changes".
+  onReminderChanged?: (reminder: ReminderJson) => void
+  // ...or deleted for good from the same form.
+  onReminderDeleted?: (reminder: ReminderJson) => void
+  // `edit(reminder)` opens the bar straight to the form, filled in with that reminder.
+  ref?: Ref<CommandBarHandle>
   children?: ReactNode
   className?: string
 }
 
+type CommandBarHandle = { edit: (reminder: ReminderJson) => void }
+
 const ignore = () => {}
 
-function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children, className }: CommandBarProps) {
+function CommandBar({
+  onChoose,
+  onReminderSaved,
+  onAgentDone = ignore,
+  onProposal = ignore,
+  onOpenChange = ignore,
+  dashedHint,
+  onReminderChanged = ignore,
+  onReminderDeleted = ignore,
+  ref,
+  children,
+  className,
+}: CommandBarProps) {
   const [bar] = useState(createCommandBarController)
   const [view, setView] = useState<View>("list")
+  const [open, setOpen] = useState(false)
   const agent = useAgent(onAgentDone)
+  // The reminder the form is editing, if it was opened from the week. The ref is read as the bar opens.
+  const [editing, setEditing] = useState<ReminderJson | null>(null)
+  const toEdit = useRef<ReminderJson | null>(null)
+  useImperativeHandle(ref, () => ({
+    edit: (reminder) => {
+      toEdit.current = reminder
+      bar.setOpen(true, { reason: "imperative" })
+    },
+  }))
+
+  // Only a card you can see counts: with the bar closed, or back at the list, the week shows nothing.
+  // A new object each render: whoever listens keeps the one they have while its id stays the same.
+  const proposal = open && view === "conversation" ? agent.proposal : undefined
+  useEffect(() => onProposal(proposal ?? null), [proposal, onProposal])
+  useEffect(() => onOpenChange(open), [open, onOpenChange])
   const root = useRef<HTMLDivElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const paper = useRef<HTMLDivElement>(null)
@@ -121,10 +166,15 @@ function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children,
         if (open) {
           delete root.current?.dataset.closing
           agent.reset()
-          jumpTo("list")
+          // Opened from a card in the week: straight to the form, filled in.
+          setEditing(toEdit.current)
+          jumpTo(toEdit.current ? "reminder" : "list")
+          toEdit.current = null
+          setOpen(true)
           return
         }
-        if (view === "reminder" && details.reason === "escape-key") {
+        // Esc on a reminder opened from the week closes the bar, back to its card.
+        if (view === "reminder" && details.reason === "escape-key" && !editing) {
           details.cancel()
           swapTo("list")
           return
@@ -138,6 +188,7 @@ function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children,
           else swapTo("list")
           return
         }
+        setOpen(false)
         // After a save the bar fades out showing the form, so it stays put until the next open.
         if (root.current?.dataset.closing !== "saved") jumpTo("list")
       }}
@@ -156,53 +207,59 @@ function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children,
       }}
     >
       {children}
-      <parts.Backdrop data-bar-layer="" className="fixed inset-0 m-0 size-auto max-h-none max-w-none border-0 bg-veil p-0" />
-      <parts.Content data-bar-layer="" className="fixed inset-x-0 top-[14vh] bottom-auto mx-auto my-0 h-fit w-[min(560px,calc(100vw-32px))] border-0 bg-transparent p-0 text-left text-ink">
-        <div ref={paper} data-paper="" aria-hidden="true" className="absolute inset-0 -z-10 origin-top rounded-[5px] bg-card shadow-card" />
+      {/* The bar sits at the foot of the screen with no veil, so the week stays in view while you ask. */}
+      <parts.Backdrop data-bar-layer="" className="fixed inset-0 m-0 size-auto max-h-none max-w-none border-0 bg-transparent p-0" />
+      <parts.Content
+        data-bar-layer=""
+        className="fixed inset-x-0 top-auto bottom-7 mx-auto my-0 h-fit w-[min(600px,calc(100vw-32px))] border-0 bg-transparent p-0 text-left text-ink max-sm:bottom-0 max-sm:w-full"
+      >
+        {/* Docked at the bottom, the bar grows upward, so its card scales from its bottom edge. */}
+        <div
+          ref={paper}
+          data-paper=""
+          aria-hidden="true"
+          className="absolute inset-0 -z-10 origin-bottom rounded-3xl border border-line bg-surface shadow-bar max-sm:rounded-b-none max-sm:border-b-0"
+        />
         <parts.Title className="sr-only">Ask</parts.Title>
         <parts.Panel ref={panel} className="relative">
-          <div ref={current} key={view} className="origin-top">
+          <div ref={current} key={view} className="origin-bottom">
           {view === "list" ? (
             <>
-              <div className="flex items-center gap-3 border-b-[1.5px] border-red-line px-4">
-                <SearchIcon className="shrink-0 text-hint" />
-                <parts.Input
-                  autoFocus
-                  placeholder="Type a command"
-                  className="h-13 w-full min-w-0 bg-transparent text-[17px] text-ink outline-none placeholder:text-hint"
-                />
+              <div className={fieldRow}>
+                <SparkleIcon className="size-4.5 shrink-0 text-accent" />
+                <parts.Input autoFocus placeholder="Type a command or ask anything" className={fieldText} />
               </div>
-              <parts.List className="max-h-[min(360px,50vh)] overflow-y-auto">
+              <parts.List className="flex max-h-[min(360px,50vh)] flex-col gap-0.5 overflow-y-auto px-2">
                 {commands.map(({ value, label, Icon }) => (
                   <parts.Item
                     key={value}
                     value={value}
                     label={label}
-                    className="group flex cursor-default items-center gap-3 border-b border-rule px-4 py-2.5 text-[15px] last:border-b-0 data-highlighted:bg-row-tint"
+                    className="group flex cursor-default items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold data-highlighted:bg-selected"
                   >
-                    <Icon className="shrink-0 text-hint group-data-highlighted:text-ink" />
-                    <span className="-mx-1 rounded-[2px] px-1 group-data-highlighted:highlighter">{label}</span>
-                    <span aria-hidden="true" className="invisible ml-auto text-[13px] text-hint group-data-highlighted:visible">
+                    <Icon className="shrink-0 text-muted group-data-highlighted:text-ink" />
+                    <span className="-mx-1 rounded-xs px-1 group-data-highlighted:highlighter">{label}</span>
+                    <span aria-hidden="true" className="invisible ml-auto text-[13px] text-muted group-data-highlighted:visible">
                       ↵
                     </span>
                   </parts.Item>
                 ))}
                 <parts.Item
                   value={ASK}
-                  className="group flex cursor-default items-center gap-3 px-4 py-2.5 text-[15px] data-highlighted:bg-row-tint"
+                  className="group flex cursor-default items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-semibold data-highlighted:bg-selected"
                 >
                   {({ query }) => (
                     <>
-                      <AskIcon className="shrink-0 text-hint group-data-highlighted:text-ink" />
-                      <span className="-mx-1 min-w-0 truncate rounded-[2px] px-1 group-data-highlighted:highlighter">Ask “{query}”</span>
-                      <span aria-hidden="true" className="invisible ml-auto text-[13px] text-hint group-data-highlighted:visible">
+                      <AskIcon className="shrink-0 text-muted group-data-highlighted:text-ink" />
+                      <span className="-mx-1 min-w-0 truncate rounded-xs px-1 group-data-highlighted:highlighter">Ask “{query}”</span>
+                      <span aria-hidden="true" className="invisible ml-auto text-[13px] text-muted group-data-highlighted:visible">
                         ↵
                       </span>
                     </>
                   )}
                 </parts.Item>
               </parts.List>
-              <parts.Empty className="px-4 py-6 text-[15px] text-hint">
+              <parts.Empty className="px-5 py-5 text-[15px] text-muted">
                 {({ query }) => <>No commands match “{query}”</>}
               </parts.Empty>
             </>
@@ -210,24 +267,32 @@ function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children,
             <Conversation agent={agent} />
           ) : (
             <>
-              <div className="flex h-13 items-center gap-3 border-b-[1.5px] border-red-line px-4">
-                <BellIcon className="shrink-0 text-hint" />
-                <p className="text-[17px]">New reminder</p>
+              <div className={fieldRow}>
+                <BellIcon className="size-4.5 shrink-0 text-accent" />
+                <p className="text-[16px] font-bold">{editing ? "Edit reminder" : "New reminder"}</p>
               </div>
               <ReminderForm
+                key={editing?.id ?? "new"}
+                editing={editing ?? undefined}
                 onSaved={(reminder) => {
                   const from = paper.current!.getBoundingClientRect()
                   if (root.current) root.current.dataset.closing = "saved"
-                  onReminderSaved?.(reminder, from)
+                  if (editing) onReminderChanged(reminder)
+                  else onReminderSaved?.(reminder, from)
+                  bar.close()
+                }}
+                onDeleted={(reminder) => {
+                  if (root.current) root.current.dataset.closing = "saved"
+                  onReminderDeleted(reminder)
                   bar.close()
                 }}
               />
             </>
           )}
           </div>
-          <div ref={footer} aria-hidden="true" className="border-t border-rule px-4 py-2.5 text-[12.5px] text-hint">
+          <div ref={footer} aria-hidden="true" className="px-5 pt-2 pb-3.5 text-[12px] font-semibold text-muted">
             <div ref={hintRow} className="flex min-h-[22.5px] flex-wrap gap-x-5 gap-y-1.5">
-              {(view === "conversation" ? conversationHints(agent) : hints[view]).map(([keys, action]) => (
+              {(view === "conversation" ? conversationHints(agent, dashedHint) : hints[view]).map(([keys, action]) => (
                 <span key={action} className="inline-flex items-center gap-1.5">
                   {keys.map((key) => (
                     <kbd key={key} className={keycap}>
@@ -246,5 +311,6 @@ function CommandBar({ onChoose, onReminderSaved, onAgentDone = ignore, children,
 }
 
 const CommandBarShortcut = parts.Shortcut
+const CommandBarTrigger = parts.Trigger
 
-export { CommandBar, CommandBarShortcut, keycap }
+export { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap, type CommandBarHandle }

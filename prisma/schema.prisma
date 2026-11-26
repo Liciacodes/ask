@@ -16,6 +16,22 @@ enum ReminderStatus {
   @@map("reminder_status")
 }
 
+// What a reminder is about, for its colour and icon in the week. The same list as lib/categories.ts.
+enum ReminderCategory {
+  work
+  health
+  call
+  message
+  food
+  travel
+  exercise
+  shopping
+  hobby
+  other
+
+  @@map("reminder_category")
+}
+
 model Reminder {
   id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId      String         @map("user_id")
@@ -24,6 +40,7 @@ model Reminder {
   dueAt       DateTime       @map("due_at") @db.Timestamptz(3)
   timezone    String
   status      ReminderStatus @default(pending)
+  category    ReminderCategory @default(other)
   sentAt      DateTime?      @map("sent_at") @db.Timestamptz(3)
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
@@ -42,4 +59,30 @@ model DailyUsage {
 
   @@id([day, subject])
   @@map("daily_usage")
+}
+
+// Someone signed in with Google. A guest's reminders move to their account when they sign in, and from then
+// on reminders.user_id holds this id instead of the visitor's.
+model User {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  googleSub String    @unique @map("google_sub")
+  email     String
+  name      String?
+  picture   String?
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  sessions  Session[]
+
+  @@map("users")
+}
+
+// A signed-in browser. The id is the SHA-256 of the token in its cookie, so the table alone can't sign anyone in.
+model Session {
+  id        String   @id
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("sessions")
 }

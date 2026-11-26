@@ -1,5 +1,6 @@
 import type { z } from "zod"
 import type { cancelReminderInput, changeReminderInput, createReminderInput } from "@/lib/agent-actions"
+import type { Category } from "@/lib/categories"
 import type { Reminder } from "@/lib/generated/prisma/client"
 import { createReminder, findReminder, updateReminder } from "@/lib/reminder-store"
 import { newReminder, reminderChanges, toJson, type ReminderJson } from "@/lib/reminders"
@@ -10,7 +11,7 @@ import { instantAt, localDateTime } from "@/lib/time"
 
 type AgentContext = { userId: string; timezone: string }
 
-type Card = { title: string; description: string | null; date: string; time: string }
+type Card = { title: string; description: string | null; date: string; time: string; category: Category }
 
 type Preview =
   | { action: "create"; reminder: Card }
@@ -23,10 +24,11 @@ const refused = (problem: string): Plan => ({ ok: false, problem })
 const problemIn = (error: z.ZodError) => error.issues.map((issue) => issue.message).join(". ")
 const notFound = refused("No reminder has that id. Look it up with listReminders first.")
 
-const cardOf = (reminder: Pick<Reminder, "title" | "description" | "dueAt">, timezone: string): Card => ({
+const cardOf = (reminder: Pick<Reminder, "title" | "description" | "dueAt" | "category">, timezone: string): Card => ({
   title: reminder.title,
   description: reminder.description,
   ...localDateTime(reminder.dueAt, timezone),
+  category: reminder.category,
 })
 
 const withoutUndefined = <T extends object>(value: T) =>
@@ -34,13 +36,15 @@ const withoutUndefined = <T extends object>(value: T) =>
 
 async function planCreate({ userId, timezone }: AgentContext, input: z.output<typeof createReminderInput>): Promise<Plan> {
   const due = instantAt(input.date, input.time, timezone)
-  const checked = newReminder.safeParse(withoutUndefined({ title: input.title, description: input.description, due_at: due.toISOString(), timezone }))
+  const checked = newReminder.safeParse(
+    withoutUndefined({ title: input.title, description: input.description, due_at: due.toISOString(), timezone, category: input.category })
+  )
   if (!checked.success) return refused(problemIn(checked.error))
 
   const { title, description, due_at } = checked.data
   return {
     ok: true,
-    preview: { action: "create", reminder: cardOf({ title, description: description ?? null, dueAt: due_at }, timezone) },
+    preview: { action: "create", reminder: cardOf({ title, description: description ?? null, dueAt: due_at, category: input.category }, timezone) },
     run: async () => toJson(await createReminder(userId, checked.data)),
   }
 }
@@ -58,6 +62,7 @@ async function planChange({ userId, timezone }: AgentContext, input: z.output<ty
     description: input.description,
     due_at: due?.toISOString(),
     timezone: due ? timezone : undefined,
+    category: input.category,
   })
   const checked = reminderChanges.safeParse(changes)
   if (!checked.success) return refused(problemIn(checked.error))
@@ -66,6 +71,7 @@ async function planChange({ userId, timezone }: AgentContext, input: z.output<ty
     title: checked.data.title ?? reminder.title,
     description: checked.data.description !== undefined ? checked.data.description : reminder.description,
     dueAt: checked.data.due_at ?? reminder.dueAt,
+    category: checked.data.category ?? reminder.category,
   }
   return {
     ok: true,

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { CATEGORIES } from "@/lib/categories"
 import type { Reminder } from "@/lib/generated/prisma/client"
 import { canonicalTimeZone } from "@/lib/time"
 
@@ -21,11 +22,15 @@ const timezone = z
   .refine((name) => canonicalTimeZone(name) !== null, "Unknown timezone. Use a name like Africa/Lagos")
   .transform((name) => canonicalTimeZone(name)!)
 
+const category = z.enum(CATEGORIES, { error: `Category must be one of: ${CATEGORIES.join(", ")}` })
+
+// Left out, the category is guessed from the title (lib/categories.ts).
 const newReminder = z.strictObject({
   title,
   description: description.optional(),
   due_at: dueAt,
   timezone,
+  category: category.optional(),
 })
 
 const reminderChanges = z
@@ -35,6 +40,7 @@ const reminderChanges = z
     due_at: dueAt,
     timezone,
     status: z.enum(["pending", "cancelled"], { error: "Status can only be pending or cancelled" }),
+    category,
   })
   .partial()
   .refine((changes) => Object.keys(changes).length > 0, "Send at least one field to change")
@@ -49,6 +55,7 @@ function toJson(reminder: Reminder) {
     due_at: reminder.dueAt.toISOString(),
     timezone: reminder.timezone,
     status: reminder.status,
+    category: reminder.category,
     sent_at: reminder.sentAt?.toISOString() ?? null,
     created_at: reminder.createdAt.toISOString(),
   }

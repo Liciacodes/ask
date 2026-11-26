@@ -1,8 +1,39 @@
-import { expect, test } from "@playwright/test"
+import { expect, test, type Page } from "@playwright/test"
 import { addTextField, bar, command, commands, expectHighlighted, goHome, openBar, openShortcut, search, status } from "./helpers"
 
 test.beforeEach(async ({ page }) => {
   await goHome(page)
+})
+
+const bottomGap = async (page: Page) => {
+  const box = (await bar(page).boundingBox())!
+  return page.viewportSize()!.height - (box.y + box.height)
+}
+
+test("the bar sits at the foot of the screen, centred and 600px wide, grows upward, and leaves the week in view", async ({ page }) => {
+  await openBar(page)
+
+  const box = (await bar(page).boundingBox())!
+  expect(box.width).toBe(600)
+  expect(box.x + box.width / 2).toBeCloseTo(page.viewportSize()!.width / 2, 0)
+  expect(await bottomGap(page)).toBeCloseTo(28, 0)
+  await expect(page.locator('[data-slot="command-bar-backdrop"]')).toHaveCSS("background-color", "rgba(0, 0, 0, 0)")
+
+  await page.keyboard.type("remind")
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("textbox", { name: "Title" })).toBeFocused()
+  await page.waitForFunction(() => document.getAnimations().length === 0)
+  expect((await bar(page).boundingBox())!.height).toBeGreaterThan(box.height)
+  expect(await bottomGap(page)).toBeCloseTo(28, 0)
+})
+
+test("on a phone the bar is a sheet across the bottom of the screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await openBar(page)
+
+  const box = (await bar(page).boundingBox())!
+  expect([box.x, box.width]).toEqual([0, 390])
+  expect(await bottomGap(page)).toBeCloseTo(0, 0)
 })
 
 test("Ctrl+K opens the bar with the cursor in the search box", async ({ page }) => {

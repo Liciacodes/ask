@@ -9,6 +9,7 @@ import {
   popupContent,
   popupState,
   popupTitle,
+  popupTrigger,
   selects,
   type ChangeDetails,
   type PopupController,
@@ -23,6 +24,7 @@ const ASK = "ask"
 
 type CommandBarOpenReason =
   | "shortcut"
+  | "trigger-press"
   | "item-press"
   | "escape-key"
   | "outside-press"
@@ -134,6 +136,8 @@ const commandBar = definePrimitive({
         el.textContent = formatShortcut(part.api.shortcut())
       },
     }),
+    // A button that opens the bar with a pointer, beside the shortcut.
+    trigger: popupTrigger(slot),
     backdrop: popupBackdrop(slot),
     content: popupContent(slot),
     title: popupTitle(slot),

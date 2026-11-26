@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CATEGORIES } from "@/lib/categories";
 
 const time24 = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -41,6 +42,10 @@ export const createReminderInput = z.strictObject({
     .string()
     .regex(time24)
     .describe("The local time, 24-hour, e.g. 18:00 for 6 pm"),
+category: z.enum(CATEGORIES).describe(
+  "What kind of reminder it is, e.g. health for doctor or medicine, work for meetings or invoices, message for texts, emails or replies. Pick other only when nothing else fits."
+),
+
 });
 
 export const changeReminderInput = z
@@ -76,13 +81,15 @@ export const changeReminderInput = z
       .describe(
         "The new local time, 24-hour, e.g. 19:00. Leave it out to keep the time.",
       ),
+      category: z.enum(CATEGORIES).optional().describe("The new kind of reminder. Leave it out to keep it."),
   })
   .refine(
     (v) =>
       v.title !== undefined ||
       v.description !== undefined ||
       v.date !== undefined ||
-      v.time !== undefined,
+      v.time !== undefined ||
+      v.category !== undefined,
     "Send at least one change",
   );
 

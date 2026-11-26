@@ -2,53 +2,174 @@
 
 @import "tailwindcss";
 
-/* Index card: a white card on a cool desk, navy ink, ruled lines, a red header line, a highlighter. */
+/* Colourful week: a lavender page, white surfaces, indigo ink and accent, and a soft colour and icon for each kind
+   of reminder. Every text colour reads at 4.5:1 on the backgrounds it's used on (e2e/contrast.spec.ts). */
 :root {
-  --desk: #e6eaf0;
-  --card: #ffffff;
-  --ink: #1c2436;
-  --hint: #5b6478;
-  --rule: #d5e0ef;
-  --red-line: #d64541;
-  --error: #b8322e;
-  --marker: #ffe57a;
-  --row-tint: #fff7d6;
-  --veil: rgb(28 36 54 / 0.14);
-  --card-shadow: 0 1px 0 rgb(28 36 54 / 0.05), 0 24px 48px -20px rgb(28 36 54 / 0.45);
-  --paper-shadow: 0 1px 0 rgb(28 36 54 / 0.06), 0 2px 6px -2px rgb(28 36 54 / 0.22);
+  --page: #f6f5ff;
+  --surface: #ffffff;
+  --today: #faf9ff;
+  --ink: #1b1a2e;
+  --muted: #6b6890;
+  --line: #e6e3fa;
+  --line-faint: #efedfb;
+  /* The accent as words, lines and focus rings; the fill is what sits behind white words. */
+  --accent: #5145e5;
+  --accent-fill: #5145e5;
+  --on-accent: #ffffff;
+  /* Buttons that cancel or delete, the same in dark: deeper than the now line's red, so white words reach 4.5:1 (4.83). */
+  --danger: #dc2626;
+  --on-danger: #ffffff;
+  --now: #e5484d;
+  --error: #c2283a;
+  --selected: #f1efff;
+  --marker: #e2deff;
+  --veil: rgb(27 26 46 / 0.18);
+  --bar-shadow: 0 28px 64px rgb(40 30 120 / 0.22);
+  --card-shadow: 0 1px 2px rgb(40 30 120 / 0.06), 0 4px 12px -4px rgb(40 30 120 / 0.16);
+  --board-shadow: 0 12px 32px rgb(60 50 160 / 0.08);
+  --work-shadow: 0 6px 16px rgb(81 69 229 / 0.25);
+
+  /* Each kind of reminder: its card, its words and icon, and the tile behind the icon. Call and message share cyan. */
+  --work: var(--accent-fill);
+  --work-ink: #ffffff;
+  --work-tile: rgb(255 255 255 / 0.22);
+  /* White words need a darker highlighter than the tile. */
+  --work-marker: rgb(0 0 0 / 0.22);
+  --health: #f1e0fb;
+  --health-ink: #5e2390;
+  --health-tile: #e2c4f7;
+  --call: #dff4fb;
+  --call-ink: #0a5c76;
+  --call-tile: #b9e6f5;
+  --message: #dff4fb;
+  --message-ink: #0a5c76;
+  --message-tile: #b9e6f5;
+  --food: #ffefc7;
+  --food-ink: #734600;
+  --food-tile: #ffe09a;
+  --travel: #ffe1da;
+  --travel-ink: #962d12;
+  --travel-tile: #ffc8ba;
+  --exercise: #d9f3e6;
+  --exercise-ink: #0e6640;
+  --exercise-tile: #b6e8cf;
+  --shopping: #fce4f1;
+  --shopping-ink: #97174c;
+  --shopping-tile: #f8c9e2;
+  --hobby: #dde6ff;
+  --hobby-ink: #2a47ae;
+  --hobby-tile: #c4d3ff;
+  --other: #eceaf6;
+  --other-ink: #45426a;
+  --other-tile: #dcd9ee;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --desk: #10151f;
-    --card: #1a2130;
-    --ink: #eef1f6;
-    --hint: #9aa4b8;
-    --rule: #2a3447;
-    --red-line: #f0625c;
-    --error: #ff8a84;
-    --marker: rgb(255 214 102 / 0.3);
-    --row-tint: rgb(255 214 102 / 0.08);
-    --veil: rgb(0 0 0 / 0.4);
-    --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.04), 0 24px 48px -16px rgb(0 0 0 / 0.7);
-    --paper-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 2px 6px -2px rgb(0 0 0 / 0.6);
+    --page: #13121d;
+    --surface: #1c1b2a;
+    --today: #211f33;
+    --ink: #eeedfb;
+    --muted: #a9a6c9;
+    --line: #312f48;
+    --line-faint: #262439;
+    --accent: #aba5ff;
+    --accent-fill: #5b50e8;
+    --on-accent: #ffffff;
+    --now: #ff6369;
+    --error: #ff8d93;
+    --selected: rgb(150 140 255 / 0.12);
+    --marker: rgb(150 140 255 / 0.3);
+    --veil: rgb(0 0 0 / 0.5);
+    --bar-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 28px 64px rgb(0 0 0 / 0.6);
+    --card-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 4px 12px -4px rgb(0 0 0 / 0.6);
+    --board-shadow: 0 0 0 1px rgb(255 255 255 / 0.03), 0 12px 32px rgb(0 0 0 / 0.4);
+    --work-shadow: 0 6px 16px rgb(0 0 0 / 0.45);
+
+    --work-tile: rgb(255 255 255 / 0.18);
+    --health: #34204a;
+    --health-ink: #ecd5fb;
+    --health-tile: #4a2e66;
+    --call: #0f3340;
+    --call-ink: #bfeaf8;
+    --call-tile: #18495b;
+    --message: #0f3340;
+    --message-ink: #bfeaf8;
+    --message-tile: #18495b;
+    --food: #382b0f;
+    --food-ink: #ffe2a3;
+    --food-tile: #52401a;
+    --travel: #3f211a;
+    --travel-ink: #ffcfc2;
+    --travel-tile: #5a2f25;
+    --exercise: #13352a;
+    --exercise-ink: #bdeed6;
+    --exercise-tile: #1e4c3c;
+    --shopping: #3d1a2c;
+    --shopping-ink: #fbcee6;
+    --shopping-tile: #58273f;
+    --hobby: #1e2848;
+    --hobby-ink: #d0dcff;
+    --hobby-tile: #2d3b68;
+    --other: #2a2940;
+    --other-ink: #dcdaf0;
+    --other-tile: #3b3958;
     color-scheme: dark;
   }
 }
 
 @theme inline {
-  --color-desk: var(--desk);
-  --color-card: var(--card);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-today: var(--today);
   --color-ink: var(--ink);
-  --color-hint: var(--hint);
-  --color-rule: var(--rule);
-  --color-red-line: var(--red-line);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-faint: var(--line-faint);
+  --color-accent: var(--accent);
+  --color-accent-fill: var(--accent-fill);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+  --color-now: var(--now);
   --color-error: var(--error);
-  --color-row-tint: var(--row-tint);
+  --color-selected: var(--selected);
   --color-veil: var(--veil);
+  --color-work: var(--work);
+  --color-work-ink: var(--work-ink);
+  --color-work-tile: var(--work-tile);
+  --color-health: var(--health);
+  --color-health-ink: var(--health-ink);
+  --color-health-tile: var(--health-tile);
+  --color-call: var(--call);
+  --color-call-ink: var(--call-ink);
+  --color-call-tile: var(--call-tile);
+  --color-message: var(--message);
+  --color-message-ink: var(--message-ink);
+  --color-message-tile: var(--message-tile);
+  --color-food: var(--food);
+  --color-food-ink: var(--food-ink);
+  --color-food-tile: var(--food-tile);
+  --color-travel: var(--travel);
+  --color-travel-ink: var(--travel-ink);
+  --color-travel-tile: var(--travel-tile);
+  --color-exercise: var(--exercise);
+  --color-exercise-ink: var(--exercise-ink);
+  --color-exercise-tile: var(--exercise-tile);
+  --color-shopping: var(--shopping);
+  --color-shopping-ink: var(--shopping-ink);
+  --color-shopping-tile: var(--shopping-tile);
+  --color-hobby: var(--hobby);
+  --color-hobby-ink: var(--hobby-ink);
+  --color-hobby-tile: var(--hobby-tile);
+  --color-other: var(--other);
+  --color-other-ink: var(--other-ink);
+  --color-other-tile: var(--other-tile);
+  --shadow-bar: var(--bar-shadow);
   --shadow-card: var(--card-shadow);
-  --shadow-paper: var(--paper-shadow);
-  --font-sans: var(--font-atkinson), system-ui, sans-serif;
+  --shadow-board: var(--board-shadow);
+  --shadow-work: var(--work-shadow);
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
 }
 
 /* The one motion curve: a strong ease-out. Tailwind's ease-out utility and plain CSS both read it. */
@@ -61,16 +182,16 @@
   background-image: linear-gradient(transparent 12%, var(--marker) 12% 88%, transparent 88%);
 }
 
-/* Faint ruled lines, like a blank index card, so an empty day looks intentional, not missing. */
-@utility ruled {
-  background-image: repeating-linear-gradient(to bottom, transparent 0 31px, var(--rule) 31px 32px);
+/* A faint line at the top of every hour in the time grid: 48px an hour, as in components/week/grid.ts. */
+@utility hour-lines {
+  background-image: repeating-linear-gradient(to bottom, var(--line-faint) 0 1px, transparent 1px 48px);
 }
 
-/* Each part of a date or time is a small input. The focused one gets the highlighter, underlined in ink. */
+/* Each part of a date or time is a small input. The focused one gets the highlighter, underlined in the accent. */
 :is([data-slot="date-input-segment"], [data-slot="time-input-segment"]) {
   &[data-type="literal"] {
     padding-inline: 1px;
-    color: var(--hint);
+    color: var(--muted);
     white-space: pre;
   }
 
@@ -87,16 +208,21 @@
     outline: none;
 
     &::placeholder {
-      color: var(--hint);
+      color: var(--muted);
     }
 
     &::selection {
       background: transparent;
     }
 
+    /* Muted words don't reach 4.5:1 on the highlighter, so an empty part's placeholder turns ink while focused. */
     &:focus {
       background: var(--marker);
-      box-shadow: inset 0 -2px var(--ink);
+      box-shadow: inset 0 -2px var(--accent);
+
+      &::placeholder {
+        color: var(--ink);
+      }
     }
   }
 
@@ -151,6 +277,25 @@
   }
 }
 
+/* A card in a narrow lane gives up its icon so its words keep their room; in a very narrow one, only the icon is
+   left. The card's name always has the rest. */
+@container (width < 96px) {
+  [data-card-icon] {
+    display: none;
+  }
+}
+
+@container (width < 44px) {
+  [data-card-icon] {
+    display: grid;
+    margin-inline: auto;
+  }
+
+  [data-card-words] {
+    display: none;
+  }
+}
+
 [data-slot="week-board-card"][data-dragging] {
   opacity: 0.35;
 }
@@ -158,14 +303,39 @@
 [data-drag-preview] {
   cursor: grabbing;
   scale: 1.03;
-  box-shadow: var(--card-shadow);
+  box-shadow: var(--bar-shadow);
 }
 
 [data-slot="week-board-list"][data-refuses] {
   opacity: 0.45;
 }
 
+/* The newest card keeps an accent ring, a pixel clear of it so it shows on a work card too. */
+[data-slot="week-board-card"][data-newest]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--accent);
+  border-radius: 15px;
+  pointer-events: none;
+}
+
+/* A card a waiting change would move fades to half strength while the dashed card shows where it would go, and back
+   when you say no. */
+[data-slot="week-board-card"][data-dimming] {
+  transition: opacity 150ms var(--ease-out);
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+[data-slot="week-board-card"][data-replaced] {
+  opacity: 0.5;
+}
+
 body {
-  background: var(--desk);
+  background: var(--page);
   color: var(--ink);
+  font-weight: 500;
 }

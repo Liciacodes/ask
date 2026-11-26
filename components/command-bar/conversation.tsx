@@ -4,12 +4,14 @@ import { createStickToBottom, isComposing } from "@ui-sdk/core"
 import { Button } from "@ui-sdk/react/button"
 import { Input } from "@ui-sdk/react/input"
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { CategoryIcon, categoryLook } from "@/components/week/category-look"
 import { localWhen } from "@/components/week/days"
 import { examples, openings, type Reason } from "@/lib/agent/not-understood"
 import type { Card, Preview } from "@/lib/agent/plans"
 import type { ReminderJson } from "@/lib/reminders"
 import { localDateTime } from "@/lib/time"
-import { AskIcon, CheckIcon } from "./icons"
+import { CheckIcon, SparkleIcon } from "./icons"
+import { fieldRow, fieldText } from "./styles"
 import { isAction, type ActionPart, type Agent } from "./use-agent"
 
 // One name per action, from the card's button to the line it leaves behind and the key hints.
@@ -44,13 +46,11 @@ function Change({ was, now, same, className }: ChangeProps) {
   if (same) return <p className={className}>{now}</p>
   return (
     <p className={className}>
-      <del className="text-hint">
+      <del>
         <span className="sr-only">was </span>
         {was}
       </del>
-      <span aria-hidden="true" className="text-hint">
-        {" → "}
-      </span>
+      <span aria-hidden="true">{" → "}</span>
       <ins className="no-underline">
         <span className="sr-only">now </span>
         {now}
@@ -59,16 +59,16 @@ function Change({ was, now, same, className }: ChangeProps) {
   )
 }
 
-const titleLine = "text-[15px] font-medium leading-snug wrap-break-word"
-const whenLine = "text-[14px] text-hint tabular-nums"
+const titleLine = "text-[20px] leading-tight font-extrabold wrap-break-word"
+const whenLine = "text-[14px] font-medium tabular-nums"
 const detailsLine = "mt-1 text-[13px] wrap-break-word whitespace-pre-wrap"
 
-// The weekday in bold ink, so a wrong day catches the eye before you approve. A day being replaced stays plain.
+// The weekday in bold, so a wrong day catches the eye before you approve. A day being replaced stays plain.
 function When({ card, plain = false }: { card: Card; plain?: boolean }) {
   const { weekday, rest } = localWhen(card)
   return (
     <>
-      <span data-weekday="" className={plain ? undefined : "font-semibold text-ink"}>
+      <span data-weekday="" className={plain ? undefined : "font-bold"}>
         {weekday}
       </span>{" "}
       {rest}
@@ -77,7 +77,7 @@ function When({ card, plain = false }: { card: Card; plain?: boolean }) {
 }
 
 function Details({ preview, marked }: { preview: Preview; marked: boolean }) {
-  const title = (card: Card) => (marked ? <span className="-mx-1 box-decoration-clone rounded-[2px] px-1 highlighter">{card.title}</span> : card.title)
+  const title = (card: Card) => (marked ? <span className="-mx-1 box-decoration-clone rounded-xs px-1 highlighter">{card.title}</span> : card.title)
 
   if (preview.action !== "change") {
     const { reminder } = preview
@@ -126,49 +126,68 @@ type PreviewCardProps = {
   onAnswer: (approved: boolean) => void
 }
 
+// The reminder a card is about: after the change, for a change.
+const shownOn = (preview: Preview) => (preview.action === "change" ? preview.after : preview.reminder)
+
+const pill = "min-h-11 rounded-full px-4 outline-offset-2 focus-visible:outline-2"
+const press = "transition-transform duration-160 ease-out active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
+
 function PreviewCard({ part, preview, refusal, active, onAnswer }: PreviewCardProps) {
   const words = wording[preview.action]
   const status = statusOf(part)
+  const { category } = shownOn(preview)
+  const look = categoryLook[category]
+  // A work card is the accent itself, so its buttons swap shades to stand out from it.
+  const onAccent = category === "work"
+  const decline = onAccent ? "border border-work-ink text-work-ink focus-visible:outline-work-ink" : "bg-surface text-ink focus-visible:outline-accent"
+  // Cancelling is red on every card.
+  const approve =
+    preview.action === "cancel"
+      ? `bg-danger px-5 text-on-danger ${onAccent ? "focus-visible:outline-work-ink" : "focus-visible:outline-accent"}`
+      : onAccent
+        ? "bg-surface text-accent focus-visible:outline-work-ink"
+        : "bg-accent-fill px-5 text-on-accent focus-visible:outline-accent"
 
   return (
-    <section
-      aria-label={words.heading}
-      data-status={status}
-      className="rounded-[3px] bg-card px-3 py-2.5 shadow-paper data-[status=declined]:opacity-60"
-    >
-      <h3 className="mb-0.5 text-[12.5px] text-hint">{words.heading}</h3>
-      <Details preview={preview} marked={active} />
-      <div className="mt-2.5 flex min-h-8 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-[13px]">
-        {status === "waiting" && active && (
-          <>
-            <Button
-              onClick={() => onAnswer(false)}
-              className="rounded-sm px-2.5 py-1.5 text-hint outline-offset-2 hover:text-ink focus-visible:outline-2 focus-visible:outline-ink"
-            >
-              {words.decline}
-            </Button>
-            <Button
-              onClick={() => onAnswer(true)}
-              className="rounded-sm bg-ink px-3 py-1.5 font-medium text-card transition-transform duration-160 ease-out outline-offset-2 focus-visible:outline-2 focus-visible:outline-ink active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
-            >
-              {words.approve}
-            </Button>
-          </>
-        )}
-        {status === "working" && <p className="text-hint">{words.working}</p>}
-        {status === "done" && (
-          <p className="flex items-center gap-1.5 text-hint">
-            <CheckIcon className="size-3.5" />
-            {words.done}
-          </p>
-        )}
-        {status === "declined" && <p className="text-hint">{words.declined}</p>}
-        {(status === "refused" || status === "failed") && (
-          <p role="alert" className="mr-auto text-error">
-            {status === "refused" ? (refusal ?? "Ask couldn't do this.") : part.state === "output-error" && part.errorText}
-          </p>
-        )}
+    <section aria-label={words.heading} data-status={status} data-category={category} className="data-[status=declined]:opacity-60">
+      <div className={`flex flex-wrap items-center justify-between gap-3.5 rounded-[18px] p-3.5 ${look.card}`}>
+        {/* At least 14rem for the words: on a narrow screen the buttons move underneath instead of squeezing them. */}
+        <div className="flex min-w-0 grow basis-56 items-center gap-3">
+          <span aria-hidden="true" className={`grid size-11 shrink-0 place-items-center rounded-xl ${look.tile}`}>
+            <CategoryIcon category={category} className="size-5" />
+          </span>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h3 className="text-[12px] font-bold tracking-[0.08em] uppercase">{words.heading}</h3>
+            <Details preview={preview} marked={active} />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-[14px] font-bold">
+          {status === "waiting" && active && (
+            <>
+              <Button onClick={() => onAnswer(false)} className={`${pill} ${decline}`}>
+                {words.decline}
+              </Button>
+              <Button onClick={() => onAnswer(true)} className={`${pill} ${press} ${approve}`}>
+                {words.approve}
+              </Button>
+            </>
+          )}
+          {status === "working" && <p>{words.working}</p>}
+          {status === "done" && (
+            <p className="flex items-center gap-1.5">
+              <CheckIcon className="size-3.5" />
+              {words.done}
+            </p>
+          )}
+          {status === "declined" && <p>{words.declined}</p>}
+        </div>
       </div>
+      {/* Below the card, on the bar's own white, where the error colour reads on every category. */}
+      {(status === "refused" || status === "failed") && (
+        <p role="alert" className="mt-2 px-1 text-[13px] font-semibold text-error">
+          {status === "refused" ? (refusal ?? "Ask couldn't do this.") : part.state === "output-error" && part.errorText}
+        </p>
+      )}
     </section>
   )
 }
@@ -249,8 +268,8 @@ function Conversation({ agent }: { agent: Agent }) {
 
   return (
     <>
-      <div className="flex items-center gap-3 border-b-[1.5px] border-red-line px-4">
-        <AskIcon className="shrink-0 text-hint" />
+      <div className={fieldRow}>
+        <SparkleIcon className="size-4.5 shrink-0 text-accent" />
         <Input
           ref={field}
           autoFocus
@@ -270,7 +289,7 @@ function Conversation({ agent }: { agent: Agent }) {
             agent.ask(question)
             setDraft("")
           }}
-          className="h-13 w-full min-w-0 bg-transparent text-[17px] text-ink outline-none placeholder:text-hint"
+          className={fieldText}
         />
         <p id={keysHint} className="sr-only">
           {waiting && `Enter: ${waiting.approve}. Escape: ${waiting.decline}.`}
@@ -281,11 +300,11 @@ function Conversation({ agent }: { agent: Agent }) {
         role="log"
         aria-label="Conversation"
         aria-busy={agent.busy}
-        className="flex max-h-[min(360px,50vh)] flex-col gap-3 overflow-y-auto px-4 py-3.5 text-[15px] leading-relaxed"
+        className="flex max-h-[min(360px,50vh)] flex-col gap-3 overflow-y-auto px-3 py-1 text-[15px] leading-relaxed [&>p]:px-2"
       >
         {agent.messages.map((message) =>
           message.role === "user" ? (
-            <p key={message.id} className="text-hint wrap-break-word">
+            <p key={message.id} className="text-muted wrap-break-word">
               {textOf(message.parts)}
             </p>
           ) : (
@@ -319,7 +338,7 @@ function Conversation({ agent }: { agent: Agent }) {
             })
           )
         )}
-        {thinking && <p className="text-hint">Thinking…</p>}
+        {thinking && <p className="text-muted">Thinking…</p>}
         {agent.problem && (
           <p role="alert" data-problem="" className="text-[13px] text-error">
             {agent.problem}

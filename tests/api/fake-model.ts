@@ -10,10 +10,11 @@ const usage = {
   outputTokens: { total: 5, text: 5, reasoning: undefined },
 }
 
-const callsTool = (toolName: string, input: object): Step => ({
+// Two calls of the same tool in one reply need ids of their own.
+const callsTool = (toolName: string, input: object, toolCallId = `call-${toolName}`): Step => ({
   stream: simulateReadableStream({
     chunks: [
-      { type: "tool-call" as const, toolCallId: `call-${toolName}`, toolName, input: JSON.stringify(input) },
+      { type: "tool-call" as const, toolCallId, toolName, input: JSON.stringify(input) },
       { type: "finish" as const, finishReason: { unified: "tool-calls" as const, raw: undefined }, usage },
     ],
   }),

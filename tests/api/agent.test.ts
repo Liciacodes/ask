@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { POST } from "@/app/api/agent/route"
 import { agentStream, MAX_STEPS, type AgentMessage } from "@/lib/agent/agent"
 import { agentChat } from "@/lib/agent/client"
+import { CATEGORIES, guessCategory } from "@/lib/categories"
 import { db } from "@/lib/db"
 import { localDateTime } from "@/lib/time"
 import { agentCases, type AgentCase, type Expected, type Saved } from "../agent-cases"
@@ -58,7 +59,7 @@ async function approveThenRun(model: MockLanguageModelV4, question: AgentMessage
 
 describe("reading", () => {
   test("a question only reads: the list runs without asking, in local time, leaving out cancelled and other people's", async () => {
-    const gym = await saveReminder({ title: "Gym", dueAt: new Date(`${nextYear}-03-10T07:00:00Z`) })
+    const gym = await saveReminder({ title: "Gym", dueAt: new Date(`${nextYear}-03-10T07:00:00Z`), category: "exercise" })
     await saveReminder({ title: "Cancelled", dueAt: new Date(`${nextYear}-03-10T09:00:00Z`), status: "cancelled" })
     await saveReminder({ title: "Theirs", dueAt: new Date(`${nextYear}-03-10T10:00:00Z`), userId: "someone-else" })
     const model = fakeModel(callsTool("listReminders", { from: `${nextYear}-03-10`, to: `${nextYear}-03-10` }), says("You have Gym at 08:00."))
@@ -68,7 +69,7 @@ describe("reading", () => {
     const [list] = toolParts(reply)
     expect(list.state).toBe("output-available")
     expect(list.output).toEqual({
-      reminders: [{ id: gym.id, title: "Gym", description: null, date: `${nextYear}-03-10`, time: "08:00", status: "pending" }],
+      reminders: [{ id: gym.id, title: "Gym", description: null, date: `${nextYear}-03-10`, time: "08:00", status: "pending", category: "exercise" }],
     })
     expect(previews(reply)).toEqual([])
     expect(model.doStreamCalls).toHaveLength(2)
@@ -78,7 +79,7 @@ describe("reading", () => {
 describe("creating", () => {
   const question = asking("Remind me to call mum on the 13th at 6pm")
   // A function, not a value: a scripted stream can only be read once.
-  const proposal = () => callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" })
+  const proposal = () => callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00", category: "call" })
 
   test("waits for your OK with a preview, and saves nothing yet", async () => {
     const model = fakeModel(proposal())
@@ -87,7 +88,7 @@ describe("creating", () => {
 
     expect(toolParts(reply).map((part) => part.state)).toEqual(["approval-requested"])
     expect(previews(reply)).toEqual([
-      { action: "create", reminder: { title: "Call mum", description: null, date: `${nextYear}-03-13`, time: "18:00" } },
+      { action: "create", reminder: { title: "Call mum", description: null, date: `${nextYear}-03-13`, time: "18:00", category: "call" } },
     ])
     expect(await db.reminder.count()).toBe(0)
     expect(model.doStreamCalls).toHaveLength(1)
@@ -99,7 +100,7 @@ describe("creating", () => {
     const { finished } = await approveThenRun(model, question)
 
     const saved = await db.reminder.findFirstOrThrow()
-    expect(saved).toMatchObject({ title: "Call mum", timezone: LAGOS, status: "pending", userId: TEST_VISITOR })
+    expect(saved).toMatchObject({ title: "Call mum", timezone: LAGOS, status: "pending", category: "call", userId: TEST_VISITOR })
     expect(saved.dueAt.toISOString()).toBe(`${nextYear}-03-13T17:00:00.000Z`)
     expect(toolParts(finished)[0]).toMatchObject({ state: "output-available", output: { done: "create" } })
   })
@@ -116,7 +117,7 @@ describe("creating", () => {
   })
 
   test("a time that has passed is refused before you see a preview, and the model is told why", async () => {
-    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: "2020-01-01", time: "18:00" }), says("I can't do that."))
+    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: "2020-01-01", time: "18:00", category: "call" }), says("I can't do that."))
 
     const reply = await run(model, [question])
 
@@ -125,11 +126,33 @@ describe("creating", () => {
     expect(JSON.stringify(model.doStreamCalls[1].prompt)).toContain("Pick a time in the future")
     expect(await db.reminder.count()).toBe(0)
   })
+
+  // Every test sentence's category is also what its title would guess, so here the two differ.
+  test("the model's category is the one shown and saved, even where the title would guess another", async () => {
+    const model = fakeModel(callsTool("createReminder", { title: "Buy milk", date: `${nextYear}-03-13`, time: "09:00", category: "food" }), says("Done."))
+
+    const { proposed } = await approveThenRun(model, asking("Buy milk for the pancakes on the 13th at 9am"))
+
+    expect(previews(proposed)).toEqual([{ action: "create", reminder: expect.objectContaining({ title: "Buy milk", category: "food" }) }])
+    expect((await db.reminder.findFirstOrThrow()).category).toBe("food")
+  })
+
+  // The schema asks for a category, so the server never has to guess one for the agent.
+  test("a call without a category is caught by the schema: no card, nothing saved, and the model is told", async () => {
+    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }), says("Which kind is it?"))
+
+    const reply = await run(model, [question])
+
+    expect(previews(reply)).toEqual([])
+    expect(reply.parts).toContainEqual(expect.objectContaining({ type: "dynamic-tool", toolName: "createReminder", state: "output-error" }))
+    expect(JSON.stringify(model.doStreamCalls[1].prompt.at(-1))).toContain("category")
+    expect(await db.reminder.count()).toBe(0)
+  })
 })
 
 // The tool's own schema or the server's check refuses it, whichever comes first; either way you never see a card.
 test.each([
-  ["creating", "createReminder", () => ({ title: "   ", date: `${nextYear}-03-13`, time: "18:00" })],
+  ["creating", "createReminder", () => ({ title: "   ", date: `${nextYear}-03-13`, time: "18:00", category: "other" })],
   ["changing", "changeReminder", (id: string) => ({ id, title: "   " })],
 ])("a title of only spaces never reaches a preview when %s, and the model hears why", async (_case, toolName, input) => {
   const dentist = await saveReminder({ title: "Dentist" })
@@ -144,7 +167,7 @@ test.each([
 
 describe("changing", () => {
   test("a new date keeps the time, and the preview shows before and after", async () => {
-    const dentist = await saveReminder({ title: "Dentist", dueAt: new Date(`${nextYear}-03-10T08:00:00Z`) })
+    const dentist = await saveReminder({ title: "Dentist", dueAt: new Date(`${nextYear}-03-10T08:00:00Z`), category: "health" })
     const model = fakeModel(callsTool("changeReminder", { id: dentist.id, date: `${nextYear}-03-12` }), says("Moved."))
 
     const { proposed } = await approveThenRun(model, asking("Move the dentist to the 12th"))
@@ -152,13 +175,25 @@ describe("changing", () => {
     expect(previews(proposed)).toEqual([
       {
         action: "change",
-        before: { title: "Dentist", description: null, date: `${nextYear}-03-10`, time: "09:00" },
-        after: { title: "Dentist", description: null, date: `${nextYear}-03-12`, time: "09:00" },
+        before: { title: "Dentist", description: null, date: `${nextYear}-03-10`, time: "09:00", category: "health" },
+        after: { title: "Dentist", description: null, date: `${nextYear}-03-12`, time: "09:00", category: "health" },
       },
     ])
     const saved = await db.reminder.findUniqueOrThrow({ where: { id: dentist.id } })
     expect(saved.dueAt.toISOString()).toBe(`${nextYear}-03-12T08:00:00.000Z`)
     expect(saved.title).toBe("Dentist")
+    expect(saved.category).toBe("health")
+  })
+
+  test("a new category on its own is a change: the preview shows it, and saying yes saves only that", async () => {
+    const lunch = await saveReminder({ title: "Lunch with Ada", dueAt: new Date(`${nextYear}-03-10T12:00:00Z`), category: "other" })
+    const model = fakeModel(callsTool("changeReminder", { id: lunch.id, category: "food" }), says("Changed."))
+
+    const { proposed } = await approveThenRun(model, asking("Lunch with Ada is a food one"))
+
+    const card = { title: "Lunch with Ada", description: null, date: `${nextYear}-03-10`, time: "13:00" }
+    expect(previews(proposed)).toEqual([{ action: "change", before: { ...card, category: "other" }, after: { ...card, category: "food" } }])
+    expect(await db.reminder.findUniqueOrThrow({ where: { id: lunch.id } })).toEqual({ ...lunch, category: "food" })
   })
 
   test("cancelling, then bringing back", async () => {
@@ -238,7 +273,7 @@ describe("dates", () => {
   test("the calendar is a lookup, not a limit: a date months past it gets its card", async () => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date("2026-11-18T10:20:00+01:00"))
-    const flights = { title: "Book flights", date: "2027-03-03", time: "10:00" }
+    const flights = { title: "Book flights", date: "2027-03-03", time: "10:00", category: "travel" }
     const model = fakeModel(callsTool("createReminder", flights))
 
     const reply = await run(model, [asking("book flights on 3 March at 10am")], { now: new Date() })
@@ -268,18 +303,21 @@ describe("what Groq is sent", () => {
     const create = tools.find((tool) => tool.name === "createReminder")!
     expect(create.type === "function" && create.inputSchema).toMatchObject({
       type: "object",
-      required: ["title", "date", "time"],
+      required: ["title", "date", "time", "category"],
       properties: {
         title: { type: "string", description: expect.any(String) },
         description: { type: "string", description: expect.any(String) },
         date: { type: "string", description: expect.any(String) },
         time: { type: "string", description: expect.any(String) },
+        category: { type: "string", enum: CATEGORIES, description: expect.any(String) },
       },
     })
+    const change = tools.find((tool) => tool.name === "changeReminder")!
+    expect(change.type === "function" && change.inputSchema).toMatchObject({ required: ["id"], properties: { category: { enum: CATEGORIES } } })
   })
 
   test("an impossible date is still caught by the full schema: no card, nothing saved, and the model is told", async () => {
-    const model = fakeModel(callsTool("createReminder", { title: "Pay rent", date: "2026-02-30", time: "09:00" }), says("That date doesn't exist."))
+    const model = fakeModel(callsTool("createReminder", { title: "Pay rent", date: "2026-02-30", time: "09:00", category: "other" }), says("That date doesn't exist."))
 
     const reply = await run(model, [asking("pay rent on 30 February at 9am")])
 
@@ -319,6 +357,12 @@ describe("asking only when it must", () => {
     expect(told).toContain("A reminder with only a detail missing, like the time, still gets a question.")
   })
 
+  test("a task with a date or time is a reminder to set, even one Ask can't do itself, so it isn't off topic", async () => {
+    const told = await instructions()
+
+    expect(told).toContain("A task with a date or time is a reminder to set, even when you can't do the task yourself.")
+  })
+
   test("only “next” with a weekday is unclear, and looking never asks", async () => {
     const told = await instructions()
 
@@ -331,7 +375,7 @@ describe("asking only when it must", () => {
   test.each(["call dad on Friday at 6pm", "call dad this Friday at 6pm"])("“%s” gets its card: the server only asks about “next”", async (said) => {
     vi.useFakeTimers({ toFake: ["Date"] })
     vi.setSystemTime(new Date("2026-11-18T10:20:00+01:00"))
-    const model = fakeModel(callsTool("createReminder", { title: "Call dad", date: "2026-11-20", time: "18:00" }))
+    const model = fakeModel(callsTool("createReminder", { title: "Call dad", date: "2026-11-20", time: "18:00", category: "call" }))
 
     const reply = await run(model, [asking(said)], { now: new Date() })
 
@@ -340,6 +384,87 @@ describe("asking only when it must", () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+})
+
+// A message with a date or time is a reminder to set. The model's first "didn't understand" for one is turned down,
+// once, and it's asked again.
+describe("“didn't understand” a message with a date or time", () => {
+  const table = { title: "Book a table for dinner", date: `${nextYear}-03-13`, time: "19:00", category: "food" }
+  const tableQuestion = asking(`Book a table for dinner on 13 March ${nextYear} at 7pm`)
+  const notUnderstood = (id: string, reason = "off-topic") => callsTool("didNotUnderstand", { reason }, id)
+  const notUnderstoodParts = (reply: AgentMessage) => toolParts(reply).filter((part) => part.type === "tool-didNotUnderstand")
+
+  test("is asked again once, and a card the second time gets its card", async () => {
+    const model = fakeModel(notUnderstood("first"), callsTool("createReminder", table))
+
+    const reply = await run(model, [tableQuestion])
+
+    expect(model.doStreamCalls).toHaveLength(2)
+    expect(previews(reply)).toEqual([{ action: "create", reminder: { description: null, ...table } }])
+    expect(notUnderstoodParts(reply).map((part) => part.state)).toEqual(["output-error"])
+    expect(toolParts(reply).at(-1)).toMatchObject({ type: "tool-createReminder", state: "approval-requested" })
+  })
+
+  test("a question the second time is asked", async () => {
+    const model = fakeModel(notUnderstood("first"), says("Which restaurant?"))
+
+    const reply = await run(model, [tableQuestion])
+
+    expect(model.doStreamCalls).toHaveLength(2)
+    expect(reply.parts.at(-1)).toMatchObject({ type: "text", text: "Which restaurant?" })
+  })
+
+  test("a second “didn't understand” stands: the reply ends there, never asking a third time", async () => {
+    const model = fakeModel(notUnderstood("first"), notUnderstood("second"), says("This is never said."))
+
+    const reply = await run(model, [asking("what's the weather tomorrow?")])
+
+    expect(model.doStreamCalls).toHaveLength(2)
+    expect(notUnderstoodParts(reply).map((part) => part.state)).toEqual(["output-error", "output-available"])
+    expect(reply.parts.at(-1)).toMatchObject({ type: "tool-didNotUnderstand", state: "output-available", output: { reason: "off-topic" } })
+  })
+
+  test.each(["asdfgh", "do the thing", "what's the weather?"])("“%s” has no date or time, so it ends in one call, as before", async (said) => {
+    const model = fakeModel(notUnderstood("first", "too-vague"), says("This is never said."))
+
+    const reply = await run(model, [asking(said)])
+
+    expect(model.doStreamCalls).toHaveLength(1)
+    expect(notUnderstoodParts(reply).map((part) => part.state)).toEqual(["output-available"])
+  })
+
+  test("only the latest message counts: a date earlier in the conversation doesn't bring a second try", async () => {
+    const earlier: AgentMessage = { id: "earlier", role: "assistant", parts: [{ type: "text", text: "Which restaurant?" }] }
+    const model = fakeModel(notUnderstood("first", "gibberish"), says("This is never said."))
+
+    await run(model, [tableQuestion, earlier, asking("asdfgh")])
+
+    expect(model.doStreamCalls).toHaveLength(1)
+  })
+
+  test("the model hears why it was asked again, in words, and so does the bar, without a failure in the log", async () => {
+    const failures = vi.spyOn(console, "error")
+    const model = fakeModel(notUnderstood("first"), callsTool("createReminder", table))
+
+    const reply = await run(model, [tableQuestion])
+
+    const why = "The person's message has a date or time, so it's a reminder to set"
+    expect(JSON.stringify(model.doStreamCalls[1].prompt)).toContain(why)
+    expect(notUnderstoodParts(reply)[0]).toMatchObject({ state: "output-error", errorText: expect.stringContaining(why) })
+    expect(failures).not.toHaveBeenCalled()
+    failures.mockRestore()
+  })
+
+  test("what was said on the way reaches the model on the next question as it did the first time", async () => {
+    const model = fakeModel(notUnderstood("first"), says("Which restaurant?"), says("OK."))
+
+    const reply = await run(model, [tableQuestion])
+    await run(model, [tableQuestion, reply, asking("Ada's place")])
+
+    const toldFirst = JSON.stringify(model.doStreamCalls[1].prompt.find((message) => message.role === "tool"))
+    const toldLater = JSON.stringify(model.doStreamCalls[2].prompt.find((message) => message.role === "tool"))
+    expect(toldLater).toBe(toldFirst)
   })
 })
 
@@ -364,10 +489,11 @@ describe("the test sentences", () => {
   }
 
   const weekdayOf = (date: string) => new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" }).format(new Date(`${date}T12:00:00Z`))
-  const card = (saved: Saved) => ({ title: saved.title, description: null, date: saved.date, time: saved.time })
+  // Saved reminders get the category the form would give them (saveAll).
+  const card = (saved: Saved) => ({ title: saved.title, description: null, date: saved.date, time: saved.time, category: guessCategory(saved.title) })
 
-  test("there are 32", () => {
-    expect(agentCases).toHaveLength(32)
+  test("there are 42", () => {
+    expect(agentCases).toHaveLength(42)
   })
 
   test.each(casesThat("create"))("“$say” previews and saves $expect.reminder.date at $expect.reminder.time", async (agentCase) => {
@@ -380,7 +506,7 @@ describe("the test sentences", () => {
 
     expect(previews(proposed)).toEqual([{ action: "create", reminder: { description: null, ...reminder } }])
     const saved = await db.reminder.findFirstOrThrow()
-    expect(saved).toMatchObject({ title: reminder.title, description: reminder.description ?? null, timezone: agentCase.timezone })
+    expect(saved).toMatchObject({ title: reminder.title, description: reminder.description ?? null, timezone: agentCase.timezone, category: reminder.category })
     expect(saved.dueAt.toISOString()).toBe(savedAt)
     // A date in the next 14 days is handed to the model with its weekday, so the model never works it out.
     const calendar = calendarIn(model)
@@ -398,9 +524,11 @@ describe("the test sentences", () => {
     await run(model, [question, answer(proposed, true)], at)
 
     const was = agentCase.saved!.find((saved) => saved.title === reminder)!
-    expect(previews(proposed)).toEqual([{ action: "change", before: card(was), after: { description: null, ...after } }])
+    // What isn't changed, the category included, stays as it was.
+    expect(previews(proposed)).toEqual([{ action: "change", before: card(was), after: { ...card(was), ...after } }])
     const saved = await db.reminder.findUniqueOrThrow({ where: { id } })
     expect({ title: saved.title, ...localDateTime(saved.dueAt, agentCase.timezone) }).toEqual(after)
+    expect(saved.category).toBe(card(was).category)
   })
 
   test.each(casesThat("cancel", "restore"))("“$say” previews $expect.reminder to $expect.does, and saying yes does it", async (agentCase) => {
@@ -447,15 +575,19 @@ describe("the test sentences", () => {
     expect(await db.reminder.findMany()).toEqual(before)
   })
 
-  test.each(casesThat("notUnderstood"))("“$say” ends in one model call with what to try ($expect.reason), and changes nothing", async (agentCase) => {
+  test.each(casesThat("notUnderstood"))("“$say” ends with what to try ($expect.reason), and changes nothing", async (agentCase) => {
     const { at, question } = await typed(agentCase)
     const before = await db.reminder.findMany()
-    // The second step is never reached: the reply ends with the tool, which needs no approval.
-    const model = fakeModel(callsTool("didNotUnderstand", { reason: agentCase.expect.reason }), says("This is never said."))
+    const calls = agentCase.expect.askedAgain ? 2 : 1
+    // The step after the last "didn't understand" is never reached: the reply ends with the tool, which needs no approval.
+    const model = fakeModel(
+      ...Array.from({ length: calls }, (_, call) => callsTool("didNotUnderstand", { reason: agentCase.expect.reason }, `call-${call}`)),
+      says("This is never said.")
+    )
 
     const reply = await run(model, [question], at)
 
-    expect(model.doStreamCalls).toHaveLength(1)
+    expect(model.doStreamCalls).toHaveLength(calls)
     expect(previews(reply)).toEqual([])
     expect(reply.parts.at(-1)).toMatchObject({ type: "tool-didNotUnderstand", state: "output-available", output: { reason: agentCase.expect.reason } })
     expect(await db.reminder.findMany()).toEqual(before)
@@ -466,7 +598,7 @@ describe("“next” with a weekday", () => {
   // Wednesday 18 November in Lagos, so next Friday could be the 20th or the 27th.
   const at = { now: new Date("2026-11-18T10:20:00+01:00"), timezone: LAGOS }
   const whichFriday = "Do you mean Friday 20 November or Friday 27 November?"
-  const dentistOn = (date: string) => callsTool("createReminder", { title: "Dentist", date, time: "09:00" })
+  const dentistOn = (date: string) => callsTool("createReminder", { title: "Dentist", date, time: "09:00", category: "health" })
   const asked: AgentMessage = { id: "asked", role: "assistant", parts: [{ type: "text", text: whichFriday }] }
 
   beforeEach(() => {
@@ -494,7 +626,7 @@ describe("“next” with a weekday", () => {
 
     const reply = await run(model, [asking("dentist next Friday at 9am"), asked, asking("the 27th")], at)
 
-    expect(previews(reply)).toEqual([{ action: "create", reminder: { title: "Dentist", description: null, date: "2026-11-27", time: "09:00" } }])
+    expect(previews(reply)).toEqual([{ action: "create", reminder: { title: "Dentist", description: null, date: "2026-11-27", time: "09:00", category: "health" } }])
   })
 
   test("a date in the same words settles it", async () => {
@@ -622,7 +754,7 @@ describe("the agent route", () => {
   }
 
   test("the bar's own conversation goes through: it asks, you approve, and the reminder is saved", async () => {
-    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }), says("Saved."))
+    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00", category: "call" }), says("Saved."))
     routeModel.current = model
     const { chat, sent, settled } = barChat()
 
@@ -638,7 +770,7 @@ describe("the agent route", () => {
     const reply = chat.messages.at(-1)!
     expect(reply.parts.find((part) => part.type === "tool-createReminder")).toMatchObject({
       state: "output-available",
-      output: { done: "create", reminder: { title: "Call mum", due_at: `${nextYear}-03-13T17:00:00.000Z` } },
+      output: { done: "create", reminder: { title: "Call mum", due_at: `${nextYear}-03-13T17:00:00.000Z`, category: "call" } },
     })
   })
 
@@ -671,7 +803,7 @@ describe("the agent route", () => {
   })
 
   test.each([true, false])("after you answer a card (yes: %s), the model isn't called again, so nothing it writes reaches the bar", async (approved) => {
-    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }), says(`${leaked} Saved!`))
+    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00", category: "call" }), says(`${leaked} Saved!`))
     routeModel.current = model
     const { chat, streams, settled } = barChat()
 

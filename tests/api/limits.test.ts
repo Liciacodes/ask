@@ -134,7 +134,7 @@ describe("each visitor's questions", () => {
 
   test("answering a preview card isn't a new question, so the last question of the day can still be approved", async () => {
     vi.stubEnv(QUESTIONS, "1")
-    using(fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }), says("Saved.")))
+    using(fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00", category: "call" }), says("Saved.")))
     const { chat, statuses } = barFor(TEST_VISITOR)
 
     await chat.sendMessage({ text: "Remind me to call mum on the 13th at 6pm" })
@@ -181,6 +181,21 @@ describe("the site's calls to the model", () => {
     await ask(OTHER_VISITOR, "Hello")
 
     expect(await usage("site")).toMatchObject({ modelCalls: 3, tokens: 45 })
+  })
+
+  test("asking the model again after a “didn't understand” is the same question, but another call", async () => {
+    using(
+      fakeModel(
+        callsTool("didNotUnderstand", { reason: "off-topic" }),
+        callsTool("createReminder", { title: "Book a table", date: `${nextYear}-03-13`, time: "19:00", category: "food" })
+      )
+    )
+
+    await ask(TEST_VISITOR, `Book a table on 13 March ${nextYear} at 7pm`)
+
+    expect(model.doStreamCalls).toHaveLength(2)
+    expect(await usage(TEST_VISITOR)).toMatchObject({ questions: 1 })
+    expect(await usage("site")).toMatchObject({ modelCalls: 2 })
   })
 
   test("once today's calls are used up, a new question is turned away before reaching the model, and costs nothing", async () => {

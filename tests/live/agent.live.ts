@@ -1,9 +1,9 @@
 // Real Groq calls, on the sentences in tests/agent-cases.ts: run `npm run test:live` only when the person paying says yes.
 // Its own config keeps it out of `npm run test:api` and CI.
 //
-// All 32 take about 52 calls and, at the last live run's 1,150 tokens in and up to 180 out a call, about 70,000
-// tokens: a third of Groq's free day, which the live site shares. Run them when the site is quiet, or a few at a
-// time: `npm run test:live -- -t "dentist"`.
+// All 42 take about 63 calls and, at the last live run's 1,400 tokens in and up to 300 out a call, about 100,000
+// tokens: half of Groq's free day, which the live site shares. Run them when the site is quiet, or a few at a
+// time: `npm run test:live -- -t "dentist"`, with ASK_LIVE_CALLS set to the calls agreed for the run.
 import { APICallError, readUIMessageStream, wrapLanguageModel, type LanguageModelMiddleware } from "ai"
 import { afterEach, expect, test, vi } from "vitest"
 import { agentStream, type AgentMessage } from "@/lib/agent/agent"
@@ -15,6 +15,13 @@ import { saveAll, setUpTestDatabase, TEST_VISITOR } from "../api/helpers"
 setUpTestDatabase()
 
 const MAX_CALLS_PER_CASE = 3
+
+// The calls agreed to for this run, when a number was named: `ASK_LIVE_CALLS=5` refuses a sixth before it reaches
+// Groq. 0 makes a dry run that shows which sentences a -t pattern picks without calling Groq at all.
+const agreedCalls = process.env.ASK_LIVE_CALLS
+const CALLS_FOR_THIS_RUN = agreedCalls === undefined || agreedCalls === "" ? Infinity : Number(agreedCalls)
+if (!(CALLS_FOR_THIS_RUN >= 0)) throw new Error(`ASK_LIVE_CALLS must be a number of calls, not "${agreedCalls}"`)
+let callsThisRun = 0
 
 // Groq's free tier takes 8,000 tokens a minute, so each call waits until the last minute's calls leave room for one
 // as big as the biggest so far. If that guess is still short, Groq says how long to wait, and the live run waits it
@@ -64,6 +71,7 @@ function pacedModel(cost: Cost) {
     middleware: {
       wrapStream: async ({ doStream }) => {
         if (++calls > MAX_CALLS_PER_CASE) throw new Error(`More than ${MAX_CALLS_PER_CASE} Groq calls for one sentence`)
+        if (++callsThisRun > CALLS_FOR_THIS_RUN) throw new Error(`The ${CALLS_FOR_THIS_RUN} Groq calls agreed for this run are used up`)
         const pacing = performance.now()
         await roomForACall()
         cost.pacedMs += performance.now() - pacing
@@ -119,9 +127,15 @@ test.each(agentCases)("the real model answers “$say” with: $expect.does", as
   const cards = parts.flatMap((part) => (part.type === "data-preview" ? [part.data as Preview] : []))
   const lists = parts.flatMap((part) => (part.type === "tool-listReminders" && "input" in part && part.input ? [part.input] : []))
   const tried = parts.filter((part) => actions.has(part.type)).map((part) => ("input" in part ? { [part.type]: part.input } : part.type))
-  const notUnderstood = parts.flatMap((part) => (part.type === "tool-didNotUnderstand" && "input" in part && part.input ? [part.input.reason] : []))
+  // Calls the tools' schemas turned down, like one with no category: the model is told and called again.
+  const schemaRefused = parts.flatMap((part) =>
+    part.type === "dynamic-tool" && part.state === "output-error" ? [{ [part.toolName]: part.input, error: part.errorText }] : []
+  )
+  // The "didn't understand" that stood, and any the server turned down because the message had a date or time.
+  const notUnderstood = parts.flatMap((part) => (part.type === "tool-didNotUnderstand" && part.state === "output-available" ? [part.input.reason] : []))
+  const askedAgain = parts.flatMap((part) => (part.type === "tool-didNotUnderstand" && part.state === "output-error" ? [part.input?.reason] : []))
   const text = parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join(" ")
-  const did = JSON.stringify({ cards, lists, tried, notUnderstood, text })
+  const did = JSON.stringify({ cards, lists, tried, schemaRefused, askedAgain, notUnderstood, text })
   console.log(`“${agentCase.say}” → ${did}\n  ${costOf(cost)}`)
 
   const expected = agentCase.expect
@@ -135,6 +149,7 @@ test.each(agentCases)("the real model answers “$say” with: $expect.does", as
             ...(expected.has.description && { description: containing(expected.has.description) }),
             date: expected.reminder.date,
             time: expected.reminder.time,
+            category: expect.toBeOneOf(expected.has.categories ?? [expected.reminder.category]),
           },
         },
       ])
@@ -165,6 +180,12 @@ test.each(agentCases)("the real model answers “$say” with: $expect.does", as
       break
     case "notUnderstood":
       expect(cards, did).toEqual([])
+      // Where it's fair, a question offering a reminder will do instead, as long as nothing is proposed.
+      if (expected.orOffersReminder && notUnderstood.length === 0) {
+        expect(tried, did).toEqual([])
+        expect(text, did).toMatch(/remind[\s\S]*\?/i)
+        break
+      }
       // Gibberish and too vague are close, so either is right for both; off topic must be off topic.
       expect(notUnderstood, did).toEqual([expected.reason === "off-topic" ? "off-topic" : expect.stringMatching(/^(gibberish|too-vague)$/)])
       break

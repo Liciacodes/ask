@@ -1,15 +1,18 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import { CommandBar, CommandBarShortcut, keycap } from "@/components/command-bar/command-bar";
+import { Account } from "@/components/account";
+import { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap, type CommandBarHandle } from "@/components/command-bar/command-bar";
+import { CalendarIcon, SparkleIcon } from "@/components/command-bar/icons";
 import type { Command } from "@/components/command-bar/commands";
-import type { Done } from "@/components/command-bar/use-agent";
-import { cardRects, playArrival, playMark } from "@/components/week/arrival";
-import { weekDays, whenOf } from "@/components/week/days";
+import type { Done, Proposal } from "@/components/command-bar/use-agent";
+import { cardRects, playArrival, playFadeIn } from "@/components/week/arrival";
+import { localWhen, weekDays, whenOf, type Day } from "@/components/week/days";
 import { useWeek } from "@/components/week/use-week";
-import { Week, WeekNote } from "@/components/week/week";
+import { Week, WeekNote, type Dashed } from "@/components/week/week";
 import type { ReminderJson } from "@/lib/reminders";
+import { localDateTime } from "@/lib/time";
 
 type Outcome =
   | { chosen: Command }
@@ -17,6 +20,7 @@ type Outcome =
   | { agent: Done }
   | { moved: ReminderJson }
   | { notMoved: { title: string; reason: string } }
+  | { deleted: ReminderJson }
   | null;
 
 const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
@@ -29,6 +33,24 @@ function AgentOutcome({ done, reminder }: Done) {
   if (done === "change") return <>Changed {title}, now {whenOf(reminder)}</>;
   if (done === "cancel") return <>Cancelled {title}</>;
   return <>Brought back {title} for {whenOf(reminder)}</>;
+}
+
+// Where the week shows a card the bar is waiting on: a new reminder or a change, on a day of this week. Cancel and
+// restore show nothing.
+function dashedFor(proposal: Proposal | null, days: Day[] | undefined): Dashed | null {
+  if (!proposal || !days) return null;
+  const { preview } = proposal;
+  if (preview.action !== "create" && preview.action !== "change") return null;
+  const card = preview.action === "create" ? preview.reminder : preview.after;
+  if (!days.some((day) => day.key === card.date)) return null;
+  return { id: proposal.id, title: card.title, category: card.category, day: card.date, time: card.time, replaces: proposal.replaces };
+}
+
+// The hint line under the bar's card says where the dashed card is.
+function dashedHint(dashed: Dashed | null, days: Day[] | undefined) {
+  if (!dashed) return undefined;
+  if (days?.find((day) => day.key === dashed.day)?.today) return "the dashed card today shows where it will go";
+  return `the dashed card on ${localWhen({ date: dashed.day, time: dashed.time }).weekday} shows where it will go`;
 }
 
 // The server can't know the reader's timezone or today's date there, so the week renders once the browser can say.
@@ -45,22 +67,33 @@ export default function Home() {
   const { state, retry, put, move, saving } = useWeek(timezone);
   const [newest, setNewest] = useState<string | null>(null);
   const weekList = useRef<HTMLOListElement>(null);
+  const commandBar = useRef<CommandBarHandle>(null);
   const arriving = useRef<{ id: string; from: DOMRect; before: ReturnType<typeof cardRects> } | null>(null);
-  const marking = useRef<string | null>(null);
+  const fading = useRef<string | null>(null);
   const stopArrival = useRef<(() => void) | null>(null);
 
-  // Once the new card is in the week, fly it in (or, from a conversation, mark it) before the browser paints it.
+  // The card the bar is waiting on, kept while its id stays the same: the bar reports a new object every render.
+  const [proposal, setProposal] = useState<Proposal | null>(null);
+  const propose = useCallback((next: Proposal | null) => setProposal((was) => (was?.id === next?.id ? was : next)), []);
+  const [barOpen, setBarOpen] = useState(false);
+  // The reminder a yes has just saved in a dashed card's place, while that card fills to solid.
+  const [landing, setLanding] = useState<string | null>(null);
+  const landed = useCallback(() => setLanding(null), []);
+  const dashed = dashedFor(proposal, week?.days);
+
+  // Once the new card is in the week, fly it in (or, from a conversation with no dashed card, fade it in) before the
+  // browser paints it.
   useLayoutEffect(() => {
     const arrival = arriving.current;
-    const mark = marking.current;
+    const fade = fading.current;
     if (!weekList.current) return;
     if (arrival) {
       arriving.current = null;
       stopArrival.current = playArrival({ week: weekList.current, ...arrival });
-    } else if (mark) {
-      marking.current = null;
+    } else if (fade) {
+      fading.current = null;
       stopArrival.current?.();
-      stopArrival.current = playMark({ week: weekList.current, id: mark });
+      stopArrival.current = playFadeIn({ week: weekList.current, id: fade });
     }
   }, [state]);
 
@@ -70,7 +103,7 @@ export default function Home() {
   const shortcut = <CommandBarShortcut className={`${keycap} min-w-11 text-[12px]`} />;
 
   return (
-    <main className="mx-auto flex w-full max-w-[1200px] flex-1 flex-col px-4 py-6 md:px-8 md:py-8">
+    <main className="mx-auto flex w-full max-w-[1272px] flex-1 flex-col px-4 py-6">
       <CommandBar
         onChoose={(chosen) => setOutcome({ chosen })}
         onReminderSaved={(saved, from) => {
@@ -94,25 +127,52 @@ export default function Home() {
           const shows = result.reminder.status !== "cancelled" && inThisWeek(result.reminder);
           setOutcome({ agent: result });
           put(result.reminder, shows);
-          if (shows) {
-            setNewest(result.reminder.id);
-            marking.current = result.reminder.id;
-          }
+          if (!shows) return;
+          setNewest(result.reminder.id);
+          // The dashed card becomes the saved one in its place; without one, the card fades in.
+          const at = timezone ? localDateTime(new Date(result.reminder.due_at), timezone) : null;
+          if (dashed && at?.date === dashed.day && at.time === dashed.time) setLanding(result.reminder.id);
+          else fading.current = result.reminder.id;
         }}
+        onReminderChanged={(reminder) => {
+          // Saved from the form after a click on its card: it changes in place, or moves to its new day.
+          const shows = inThisWeek(reminder);
+          setOutcome({ agent: { done: "change", reminder } });
+          put(reminder, shows);
+          if (shows) setNewest(reminder.id);
+        }}
+        onReminderDeleted={(reminder) => {
+          setOutcome({ deleted: reminder });
+          put(reminder, false);
+        }}
+        ref={commandBar}
+        onProposal={propose}
+        onOpenChange={setBarOpen}
+        dashedHint={dashedHint(dashed, week?.days)}
         className="flex flex-1 flex-col"
       >
-        <header className="flex items-center justify-between gap-4">
-          <h1 className="text-[15px] font-semibold">Ask</h1>
-          <p className="text-[13px] text-hint">Press {shortcut} to open Ask</p>
-        </header>
-        <section aria-labelledby="week-title" className="mt-8 flex flex-1 flex-col">
-          <div className="flex flex-wrap items-baseline gap-x-3">
-            <h2 id="week-title" className="text-[24px] font-semibold tracking-[-0.01em]">
-              This week
-            </h2>
-            {week && <p className="text-[15px] text-hint">{week.range}</p>}
+        <header className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-fill text-on-accent">
+              <CalendarIcon className="size-5" />
+            </span>
+            {week && <h1 className="text-[26px] leading-tight font-extrabold tracking-[-0.02em]">{week.title}</h1>}
           </div>
-          <div className="mt-1 flex min-h-6 flex-wrap items-center gap-x-5 gap-y-1 text-[14px]">
+          <div className="flex flex-wrap items-center gap-3">
+            <CommandBarTrigger className="flex min-h-11 items-center gap-2.5 rounded-full bg-accent-fill py-1 pr-2 pl-4 text-[14px] font-bold text-on-accent outline-offset-2 transition-transform duration-160 ease-out focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100">
+              <SparkleIcon className="size-4" />
+              Ask anything
+              <CommandBarShortcut className="min-w-11 rounded-full bg-white/10 px-2.5 py-1 text-center font-sans text-[12px] font-bold" />
+            </CommandBarTrigger>
+            <Account />
+          </div>
+        </header>
+        <section aria-labelledby="week-title" className="mt-5 flex flex-1 flex-col">
+          {/* The month title and each day's date say which week it is; this names it for screen readers. */}
+          <h2 id="week-title" className="sr-only">
+            This week{week && `, ${week.range}`}
+          </h2>
+          <div className="flex min-h-6 flex-wrap items-center gap-x-5 gap-y-1 text-[14px]">
             <p role="status" className="empty:-me-5">
               {outcome && "chosen" in outcome && (
                 <>
@@ -128,6 +188,11 @@ export default function Home() {
               {outcome && "moved" in outcome && (
                 <>
                   Moved <span className={marked}>{outcome.moved.title}</span> to {whenOf(outcome.moved)}
+                </>
+              )}
+              {outcome && "deleted" in outcome && (
+                <>
+                  Deleted: <span className={marked}>{outcome.deleted.title}</span>
                 </>
               )}
               {outcome && "notMoved" in outcome && (
@@ -150,8 +215,13 @@ export default function Home() {
               days={week.days}
               timezone={timezone}
               state={state}
-              marked={newest}
+              newest={newest}
               saving={saving}
+              dashed={dashed}
+              landing={landing}
+              onLanded={landed}
+              barOpen={barOpen}
+              onOpen={(reminder) => commandBar.current?.edit(reminder)}
               onMove={async (reminder, day) => {
                 const result = await move(reminder, day);
                 setOutcome(result.ok ? { moved: result.reminder } : { notMoved: { title: reminder.title, reason: result.reason } });

@@ -1,5 +1,5 @@
-// There are no accounts yet: each visitor is a random id, kept in a cookie, and every reminder belongs to one.
-// proxy.ts gives a visitor their id; each route checks it here before reading or changing anything.
+// A guest is a random visitor id, kept in a cookie, and their reminders belong to it until they sign in
+// (lib/session.ts). proxy.ts gives a visitor their id; routes ask ownerFrom in lib/session.ts whose reminders to use.
 
 // On HTTPS the __Host- prefix makes the browser refuse the cookie unless it's Secure, on this host only, for the
 // whole site. Plain-http localhost can't have Secure cookies, so local runs use the plain name.
@@ -43,4 +43,4 @@ function visitorCookie(protocol: string, id: string) {
   }
 }
 
-export { isVisitorId, LOCAL_COOKIE, MAX_AGE, noVisitor, SECURE_COOKIE, visitorCookie, visitorFrom }
+export { cookieIn, isVisitorId, LOCAL_COOKIE, MAX_AGE, noVisitor, SECURE_COOKIE, visitorCookie, visitorFrom }

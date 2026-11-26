@@ -40,6 +40,15 @@ const doesNotUnderstand = (reason: Reason, toolCallId = "call-1"): Chunk[] => [
   { type: "tool-output-available", toolCallId, output: { reason } },
 ]
 
+// The model didn't understand a message with a date or time: the server turns that down, and the model's second
+// answer follows in a step of its own.
+const askedAgain = (reason: Reason, toolCallId = "call-0"): Chunk[] => [
+  { type: "tool-input-available", toolCallId, toolName: "didNotUnderstand", input: { reason } },
+  { type: "tool-output-error", toolCallId, errorText: "Error: The person's message has a date or time, so it's a reminder to set." },
+  { type: "finish-step" },
+  { type: "start-step" },
+]
+
 // The reply stops before a word of it: what the route sends when Groq, or the site's day, has no room for the call.
 const stopsWith = (errorText: string): Chunk[] => [
   { type: "start", messageId: "reply-1" },
@@ -55,8 +64,9 @@ const turn = (...pieces: Chunk[][]): Chunk[] => [
 ]
 
 type Sent = { messages: AgentMessage[]; timezone: string }
-// A scripted answer for each request in turn: a stream, an error response, or "never" to leave it waiting.
-type Answer = Chunk[] | { status: number; body: string } | "never"
+// A scripted answer for each request in turn: a stream, an error response, "never" to leave it waiting, or a stream
+// sent once `until` settles, to see what shows while the answer is on its way.
+type Answer = Chunk[] | { status: number; body: string } | { until: Promise<unknown>; chunks: Chunk[] } | "never"
 
 // Answers POST /api/agent in the browser, so no test calls a model or reads a database.
 async function fakeAgent(page: Page, ...answers: Answer[]) {
@@ -66,13 +76,15 @@ async function fakeAgent(page: Page, ...answers: Answer[]) {
     requests.push(route.request().postDataJSON() as Sent)
     if (answer === "never") return
     if ("status" in answer) return route.fulfill(answer)
+    if ("until" in answer) await answer.until
+    const chunks = "until" in answer ? answer.chunks : answer
     await route.fulfill({
       status: 200,
       headers: UI_MESSAGE_STREAM_HEADERS,
-      body: [...answer.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`), "data: [DONE]\n\n"].join(""),
+      body: [...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`), "data: [DONE]\n\n"].join(""),
     })
   })
   return requests
 }
 
-export { declined, did, doesNotUnderstand, fakeAgent, proposes, refused, says, stopsWith, turn, type Sent }
+export { askedAgain, declined, did, doesNotUnderstand, fakeAgent, proposes, refused, says, stopsWith, turn, type Sent }
