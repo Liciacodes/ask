@@ -72,7 +72,8 @@ test("an empty title is caught before anything is sent", async ({ page }) => {
   await openForm(page)
   await page.keyboard.press("Enter")
 
-  await expect(page.getByText("Add a title")).toBeVisible()
+  // In the bar: UI SDK also reads each field error out from a hidden live region, 100ms later, with the same words.
+  await expect(bar(page).getByText("Add a title")).toBeVisible()
   await expect(title(page)).toBeFocused()
   expect(requests).toEqual([])
 })
@@ -89,7 +90,7 @@ test("a problem the server finds shows under its field, and the form stays open"
   await page.keyboard.type("Buy milk")
   await page.keyboard.press("Enter")
 
-  await expect(page.getByText("Pick a time in the future")).toBeVisible()
+  await expect(bar(page).getByText("Pick a time in the future")).toBeVisible()
   await expect(bar(page)).toBeVisible()
   await expect(status(page)).toBeEmpty()
 })
