@@ -33,8 +33,8 @@ type Expected =
   // Not an action, a question or a list: the model calls didNotUnderstand, and the bar says what to try. With a date
   // or time in the message, the first one is turned down and the model is `askedAgain`; the second one stands. Where
   // asking again may fairly bring a question offering a reminder instead, the real model may answer with that
-  // (`orOffersReminder`).
-  | { does: "notUnderstood"; reason: Reason; askedAgain?: true; orOffersReminder?: true }
+  // (`orOffersReminder`), as long as the question says what the reminder is `for`.
+  | { does: "notUnderstood"; reason: Reason; askedAgain?: true; orOffersReminder?: { for: string } }
 
 type AgentCase = { say: string; now: string; timezone: string; saved?: Saved[]; expect: Expected }
 
@@ -418,8 +418,8 @@ const agentCases: AgentCase[] = [
     now: MORNING,
     timezone: LAGOS,
     // Asked again, the real model offered "What time tomorrow would you like to be reminded to check the weather?"
-    // in 2 of 2 runs. Friendly, and Ask is a reminder app, so that's fine too.
-    expect: { does: "notUnderstood", reason: "off-topic", askedAgain: true, orOffersReminder: true },
+    // in 2 of 2 runs. Friendly, and Ask is a reminder app, so that's fine too, as long as it names the weather.
+    expect: { does: "notUnderstood", reason: "off-topic", askedAgain: true, orOffersReminder: { for: "weather" } },
   },
   {
     say: "do the thing",

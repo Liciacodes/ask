@@ -180,10 +180,12 @@ test.each(agentCases)("the real model answers “$say” with: $expect.does", as
       break
     case "notUnderstood":
       expect(cards, did).toEqual([])
-      // Where it's fair, a question offering a reminder will do instead, as long as nothing is proposed.
+      // Where it's fair, a question offering a reminder will do instead, as long as nothing is proposed and the
+      // question says what the reminder is for.
       if (expected.orOffersReminder && notUnderstood.length === 0) {
         expect(tried, did).toEqual([])
         expect(text, did).toMatch(/remind[\s\S]*\?/i)
+        expect(text, did).toMatch(new RegExp(expected.orOffersReminder.for, "i"))
         break
       }
       // Gibberish and too vague are close, so either is right for both; off topic must be off topic.
