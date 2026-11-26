@@ -255,6 +255,19 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expectReadable(page)
     })
 
+    for (const [path, heading] of [
+      ["/privacy", "Privacy"],
+      ["/terms", "Terms"],
+    ]) {
+      test(`the ${heading} page, with its links and footer`, async ({ page }) => {
+        await page.goto(path)
+
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading)
+        await expect(page.getByRole("navigation", { name: "Legal" })).toBeVisible()
+        await expectReadable(page)
+      })
+    }
+
     test("the week when it can't load", async ({ page }) => {
       await page.route("**/api/week?*", (route) => route.fulfill({ status: 500, json: { error: "Database unavailable" } }))
       await goHome(page, "already faked")

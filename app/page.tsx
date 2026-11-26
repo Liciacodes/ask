@@ -3,6 +3,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { Account } from "@/components/account";
+import { SiteFooter } from "@/components/site-footer";
 import { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap, type CommandBarHandle } from "@/components/command-bar/command-bar";
 import { SparkleIcon } from "@/components/command-bar/icons";
 import type { Command } from "@/components/command-bar/commands";
@@ -248,6 +249,7 @@ export default function Home() {
           )}
         </section>
       </CommandBar>
+      <SiteFooter className="mt-6" />
     </main>
   );
 }
