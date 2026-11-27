@@ -3,6 +3,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
 import { Account } from "@/components/account";
+import { RemindersToggle } from "@/components/reminders-toggle";
 import { SiteFooter } from "@/components/site-footer";
 import { CommandBar, CommandBarShortcut, CommandBarTrigger, keycap, type CommandBarHandle } from "@/components/command-bar/command-bar";
 import { SparkleIcon } from "@/components/command-bar/icons";
@@ -183,6 +184,7 @@ export default function Home() {
               Ask anything
               <CommandBarShortcut className="min-w-11 rounded-[10px] bg-strong-key px-2.25 py-1.25 text-center font-sans text-[12px] font-semibold" />
             </CommandBarTrigger>
+            <RemindersToggle />
             <Account />
           </div>
         </header>

@@ -126,7 +126,7 @@ for (const colorScheme of ["light", "dark"] as const) {
         // Today's column is tinted, so a card there is measured on it too.
         reminder("Dentist", "2026-11-18T08:00:00Z", { category: "health", description: "Bring the forms" }),
         reminder("Invoice", "2026-11-16T08:00:00Z", { status: "sent", sent_at: "2026-11-16T08:00:01Z", category: "work" }),
-        reminder("Call mum", "2026-11-17T17:30:00Z", { status: "failed", category: "call" }),
+        reminder("Call Dad", "2026-11-17T17:30:00Z", { status: "failed", category: "call" }),
       ])
       await openForm(page)
       await title(page).fill("Buy milk")
@@ -253,6 +253,33 @@ for (const colorScheme of ["light", "dark"] as const) {
       await expect(bar(page).getByRole("button", { name: "Delete reminder" })).toBeVisible()
       await expect(bar(page).getByRole("link", { name: /^Add to Google Calendar/ })).toBeVisible()
       await expectReadable(page)
+    })
+
+    test("the header's Turn on reminders button, and the note when notifications are blocked", async ({ page }) => {
+      // Undecided, as a real browser starts (headless Chromium starts at "denied"), then a no to the prompt.
+      await page.addInitScript(() => {
+        let permission: NotificationPermission = "default"
+        Object.defineProperty(Notification, "permission", { configurable: true, get: () => permission })
+        Notification.requestPermission = async () => (permission = "denied")
+      })
+      await goHome(page)
+      const turnOn = page.getByRole("button", { name: "Turn on reminders" })
+      await expect(turnOn).toBeVisible()
+      await expectReadable(page)
+
+      await turnOn.click()
+      await expect(page.getByRole("status").filter({ hasText: "Notifications are blocked for Ask." })).toBeVisible()
+      await expectReadable(page)
+    })
+
+    test.describe("on an iPhone outside the Home Screen", () => {
+      test.use({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1" })
+
+      test("the note saying to add Ask to the Home Screen", async ({ page }) => {
+        await goHome(page)
+        await expect(page.getByRole("status").filter({ hasText: "add Ask to your Home Screen" })).toBeVisible()
+        await expectReadable(page)
+      })
     })
 
     for (const [path, heading] of [

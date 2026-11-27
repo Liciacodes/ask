@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process"
 import nextEnv from "@next/env"
 import { FAKE_GOOGLE_ENV } from "./fake-google.mjs"
+import { FAKE_NOTIFY_ENV } from "./fake-notify.mjs"
 
 // Groq is paid for, so the one run that calls it, `npm run test:live` (marked --real-groq), also needs
 // ALLOW_REAL_GROQ=1 set for that one command. It's read before the .env files load: a line in .env.local doesn't count.
@@ -45,7 +46,8 @@ if (realGroq && !allowRealGroq) {
 // variables, so nothing in the run can load the real key from .env.local again, and lib/agent/model.ts refuses
 // an empty key before any request.
 // Google sign-in always goes to the fake (scripts/fake-google.mjs), with fake credentials in place of the real ones.
-const env = { ...process.env, DATABASE_URL: TEST_DATABASE_URL, ...FAKE_GOOGLE_ENV }
+// Notifications go to the fakes too (scripts/fake-notify.mjs): QStash on 127.0.0.1, fake keys, fake push services.
+const env = { ...process.env, DATABASE_URL: TEST_DATABASE_URL, ...FAKE_GOOGLE_ENV, ...FAKE_NOTIFY_ENV }
 delete env.ALLOW_REAL_GROQ
 if (realGroq) env.ALLOW_REAL_GROQ = "1"
 else env.GROQ_API_KEY = ""

@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Email, inlineLink, LegalPage } from "@/components/legal-page"
-import { OWNER } from "@/components/site-footer"
+import { OWNER } from "@/lib/site"
 
 export const metadata: Metadata = {
   title: "Privacy · Ask",
@@ -41,6 +41,11 @@ export default function Privacy() {
           <strong>Daily counts:</strong> how many questions you&apos;ve asked the assistant each day, so that everyone gets a fair
           share of its daily limit.
         </li>
+        <li>
+          <strong>If you turn reminders on:</strong> for each browser, the address its push service gave it and two keys that
+          let Ask encrypt notifications for it. Ask also notes the time a notification is scheduled for, and whether it was
+          sent.
+        </li>
       </ul>
 
       <h2>The assistant</h2>
@@ -66,6 +71,15 @@ export default function Privacy() {
           <strong>Google</strong> handles sign-in, if you choose it. &ldquo;Add to Google Calendar&rdquo; takes a reminder to
           Google only when you click it, and you save it there yourself.
         </li>
+        <li>
+          <strong>Upstash</strong> schedules each notification, if you turn reminders on. It sees a reminder&apos;s ID and the
+          time it&apos;s due, never its title or note.
+        </li>
+        <li>
+          <strong>Your browser&apos;s push service</strong> delivers each notification: Google for Chrome and Android, Apple for
+          Safari, Mozilla for Firefox, Microsoft for Edge on Windows. Ask encrypts the reminder for your browser first, so the
+          push service can&apos;t read it.
+        </li>
       </ul>
       <p>Ask has no ads and no analytics or tracking, and it doesn&apos;t sell your data or share it with anyone else.</p>
 
@@ -76,6 +90,10 @@ export default function Privacy() {
           removes it for good.
         </li>
         <li>Sign-in sessions end after 30 days, or when you sign out.</li>
+        <li>
+          A browser&apos;s push subscription stays until you turn reminders off there, sign out there, or its push service says
+          it no longer takes notifications.
+        </li>
         <li>An account stays until you ask for it to be deleted.</li>
         <li>
           If you clear your browser&apos;s cookies as a guest, Ask can no longer tell that your guest reminders are yours, so
@@ -86,9 +104,9 @@ export default function Privacy() {
       <h2>Deleting everything</h2>
       <p>
         You can delete any reminder yourself: click it in your week, then &ldquo;Delete reminder&rdquo;. To delete your whole
-        account, email <Email /> from the address you sign in with. Your account, its reminders and its sessions will be
-        deleted within 30 days, and you&apos;ll get a reply when it&apos;s done. Email the same address with any other question
-        about your data.
+        account, email <Email /> from the address you sign in with. Your account, its reminders, its sessions and its push
+        subscriptions will be deleted within 30 days, and you&apos;ll get a reply when it&apos;s done. Email the same address
+        with any other question about your data.
       </p>
 
       <h2>Children</h2>

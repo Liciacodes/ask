@@ -1,8 +1,5 @@
 import Link from "next/link"
 
-// Who runs Ask, as the privacy and terms pages name them.
-const OWNER = { name: "Felicia Udosen", email: "udosenfelicia@gmail.com" } as const
-
 // The links to the privacy and terms pages, at the foot of every page. Quiet grey words that turn ink on hover, each a
 // 44px tap target with the keyboard's focus ring. `current` marks the page you're on.
 function SiteFooter({ current, className = "" }: { current?: "privacy" | "terms"; className?: string }) {
@@ -25,4 +22,4 @@ function SiteFooter({ current, className = "" }: { current?: "privacy" | "terms"
   )
 }
 
-export { OWNER, SiteFooter }
+export { SiteFooter }

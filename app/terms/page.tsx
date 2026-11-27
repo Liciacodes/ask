@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { Email, inlineLink, LegalPage } from "@/components/legal-page"
-import { OWNER } from "@/components/site-footer"
+import { OWNER } from "@/lib/site"
 
 export const metadata: Metadata = {
   title: "Terms · Ask",

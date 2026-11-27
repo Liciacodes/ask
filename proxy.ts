@@ -22,4 +22,6 @@ function privately(response: NextResponse) {
   return response
 }
 
-export const config = { matcher: "/api/:path*" }
+// Every API route but the two no browser calls: QStash's callback (/api/notify) and Vercel's cron (/api/cron/…),
+// which need no visitor id.
+export const config = { matcher: "/api/((?!notify$|cron/).*)" }

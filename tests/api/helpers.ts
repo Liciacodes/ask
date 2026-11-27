@@ -25,7 +25,7 @@ function setUpTestDatabase() {
     }
   })
   beforeEach(async () => {
-    await db.$executeRaw`TRUNCATE TABLE reminders, daily_usage, sessions, users`
+    await db.$executeRaw`TRUNCATE TABLE reminders, daily_usage, sessions, users, push_subscriptions`
   })
   afterAll(async () => {
     await db.$disconnect()

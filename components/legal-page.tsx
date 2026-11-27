@@ -1,10 +1,12 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
-import { OWNER, SiteFooter } from "./site-footer"
+import { OWNER } from "@/lib/site"
+import { SiteFooter } from "./site-footer"
 
 // The privacy and terms pages: plain words on the calm week's white board, with a way back to Ask. Static, with no
 // script of their own, so reading them sets no cookie.
-const UPDATED = "26 November 2026"
+// Each page's own date: change it whenever that page's words change.
+const UPDATED = { privacy: "27 November 2026", terms: "26 November 2026" } as const
 
 function LegalPage({ title, page, children }: { title: string; page: "privacy" | "terms"; children: ReactNode }) {
   return (
@@ -17,7 +19,7 @@ function LegalPage({ title, page, children }: { title: string; page: "privacy" |
       </Link>
       <article className="mt-6 rounded-4xl bg-surface px-6 py-8 shadow-board sm:px-10 sm:py-10">
         <h1 className="text-[30px] leading-tight font-semibold tracking-[-0.015em]">{title}</h1>
-        <p className="mt-2 text-[14px] text-muted">Last updated {UPDATED}</p>
+        <p className="mt-2 text-[14px] text-muted">Last updated {UPDATED[page]}</p>
         <div className="mt-6 flex flex-col gap-4 text-[16px] leading-relaxed [&_h2]:mt-4 [&_h2]:text-[19px] [&_h2]:font-semibold [&_strong]:font-semibold [&_ul]:flex [&_ul]:list-disc [&_ul]:flex-col [&_ul]:gap-2 [&_ul]:pl-5">
           {children}
         </div>

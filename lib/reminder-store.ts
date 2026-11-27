@@ -2,6 +2,7 @@ import { z } from "zod"
 import { guessCategory } from "@/lib/categories"
 import { db } from "@/lib/db"
 import type { Reminder } from "@/lib/generated/prisma/client"
+import { scheduleIfDue } from "@/lib/notifications/schedule"
 import type { newReminder, reminderChanges } from "@/lib/reminders"
 
 // Every read and write of reminders, shared by the API routes and the agent. Input arrives already checked
@@ -10,8 +11,12 @@ import type { newReminder, reminderChanges } from "@/lib/reminders"
 type NewReminder = z.output<typeof newReminder>
 type ReminderChanges = z.output<typeof reminderChanges>
 
-function createReminder(userId: string, { title, description, due_at, timezone, category }: NewReminder) {
-  return db.reminder.create({ data: { userId, title, description, dueAt: due_at, timezone, category: category ?? guessCategory(title) } })
+// Saving a reminder also asks for its notification, when one is due within 7 days and its owner has turned
+// reminders on (lib/notifications/schedule.ts). That never fails the save.
+async function createReminder(userId: string, { title, description, due_at, timezone, category }: NewReminder) {
+  const reminder = await db.reminder.create({ data: { userId, title, description, dueAt: due_at, timezone, category: category ?? guessCategory(title) } })
+  await scheduleIfDue(reminder)
+  return reminder
 }
 
 // A malformed id finds nothing, the same as an id that doesn't exist or belongs to someone else.
@@ -28,10 +33,18 @@ async function updateReminder(reminder: Reminder, { title, description, due_at, 
   if (status && reminder.status !== "pending" && reminder.status !== "cancelled") {
     return { ok: false, reason: "status-locked", status: reminder.status }
   }
+  // A reminder that was sent, or couldn't be, and is moved to a time still ahead is waiting again: it's pending,
+  // and gets a notification at its new time.
+  const reopens =
+    (reminder.status === "sent" || reminder.status === "failed") &&
+    due_at !== undefined &&
+    due_at.getTime() !== reminder.dueAt.getTime() &&
+    due_at.getTime() > Date.now()
   const updated = await db.reminder.update({
     where: { id: reminder.id },
-    data: { title, description, dueAt: due_at, timezone, status, category },
+    data: { title, description, dueAt: due_at, timezone, status, category, ...(reopens && { status: "pending", sentAt: null }) },
   })
+  await scheduleIfDue(updated)
   return { ok: true, reminder: updated }
 }
 

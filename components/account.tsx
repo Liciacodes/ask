@@ -37,7 +37,16 @@ export function Account() {
   }, []);
 
   const signOut = async () => {
-    await fetch("/api/auth/signout", { method: "POST" }).catch(() => undefined);
+    // Reminders turned on in this browser stop too: its subscription leaves the account, so a shared computer
+    // stops showing them.
+    const registration = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration("/").catch(() => undefined) : undefined;
+    const subscription = (await registration?.pushManager.getSubscription().catch(() => null)) ?? null;
+    await fetch("/api/auth/signout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(subscription ? { endpoint: subscription.endpoint } : {}),
+    }).catch(() => undefined);
+    await subscription?.unsubscribe().catch(() => undefined);
     // A fresh page, so nothing of the account's week stays on screen.
     window.location.reload();
   };

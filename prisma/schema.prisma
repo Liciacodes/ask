@@ -43,9 +43,27 @@ model Reminder {
   category    ReminderCategory @default(other)
   sentAt      DateTime?      @map("sent_at") @db.Timestamptz(3)
   createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  // The due time a QStash message is waiting for (lib/notifications/schedule.ts), so the daily cron doesn't
+  // publish it again. A moved reminder no longer matches, and gets a new message.
+  notifyScheduledFor DateTime? @map("notify_scheduled_for") @db.Timestamptz(3)
 
   @@index([userId, dueAt])
+  @@index([status, dueAt])
   @@map("reminders")
+}
+
+// A browser that turned reminders on: where its push service takes notifications, and the keys to encrypt them.
+// owner_id is a visitor id or a user id, like reminders.user_id, and moves with them on sign-in (lib/owner-move.ts).
+model PushSubscription {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId   String   @map("owner_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([ownerId])
+  @@map("push_subscriptions")
 }
 
 // What Ask was used for on one day (UTC), for the daily limits. A visitor's row counts their questions;

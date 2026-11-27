@@ -1,6 +1,9 @@
 import { createHash, randomBytes } from "node:crypto"
 import { db } from "@/lib/db"
 import type { GoogleProfile } from "@/lib/google"
+import { scheduleOwnerWeek } from "@/lib/notifications/schedule"
+import { deleteSubscription } from "@/lib/notifications/subscriptions"
+import { moveGuestToAccount } from "@/lib/owner-move"
 import { cookieIn, visitorFrom } from "@/lib/visitor"
 
 // Signing in is optional. A signed-in browser carries a session cookie with a random token; the sessions table
@@ -40,20 +43,28 @@ async function ownerFrom(request: Request) {
   return (await userFrom(request))?.id ?? visitorFrom(request)
 }
 
-// Signs `profile` in: finds or makes their account, moves this browser's guest reminders into it, and starts a
-// session, all at once. Returns the token for the cookie.
+// Signs `profile` in: finds or makes their account, moves this browser's guest reminders and push subscriptions
+// into it (lib/owner-move.ts), and starts a session, all at once. Returns the token for the cookie.
 async function signIn(profile: GoogleProfile, visitor: string | null) {
   const token = randomBytes(32).toString("base64url")
-  await db.$transaction(async (tx) => {
+  const userId = await db.$transaction(async (tx) => {
     const { sub, ...details } = profile
     const user = await tx.user.upsert({ where: { googleSub: sub }, create: { googleSub: sub, ...details }, update: details })
-    if (visitor) await tx.reminder.updateMany({ where: { userId: visitor }, data: { userId: user.id } })
+    if (visitor) await moveGuestToAccount(tx, visitor, user.id)
     await tx.session.create({ data: { id: hash(token), userId: user.id, expiresAt: new Date(Date.now() + SESSION_DAYS * 86_400_000) } })
+    return user.id
   })
+  // The guest's reminders may now belong to an account with reminders turned on elsewhere: schedule them now,
+  // rather than at the next daily cron. A failure here never fails the sign-in.
+  if (visitor) await scheduleOwnerWeek(userId).catch((error: unknown) => console.warn("Couldn't schedule after sign-in:", error))
   return token
 }
 
-async function signOut(request: Request) {
+// Ends this browser's session. With `endpoint`, this browser's push subscription goes too, so a shared computer
+// stops showing the account's reminders.
+async function signOut(request: Request, endpoint?: string) {
+  const user = endpoint ? await userFrom(request) : null
+  if (user && endpoint) await deleteSubscription(user.id, endpoint)
   const token = sessionToken(request)
   if (token) await db.session.deleteMany({ where: { id: hash(token) } })
 }

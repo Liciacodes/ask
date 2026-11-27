@@ -266,6 +266,15 @@ The look of `docs/design/calm-week.html`, with no new features: every behaviour,
   - Screenshots of desktop, tablet and phone in both themes.
   - A test on a real phone: the on-screen keyboard may cover the bottom sheet, especially in iOS Safari.
 
+### Reminder notifications (branch `reminder-notifications`, from `main`, 27 November)
+A browser notification at each reminder's time, even with Ask's tab closed, for guests and accounts, never twice.
+- **Turning it on.** "Turn on reminders" in the header asks for permission, registers `public/sw.js`, subscribes, and saves the subscription. Nothing is asked on page load. On an iPhone it says to add Ask to the Home Screen first (`app/manifest.ts`, icons from `app/icon.tsx`).
+- **Scheduling.** A pending reminder due within 7 days, of an owner with a subscription, gets a QStash message at its time when it's saved, or when reminders are turned on. A once-a-day Vercel cron schedules the rest as they come within 7 days.
+- **Sending, at most once.** `POST /api/notify` checks QStash's signature, claims the reminder in one `UPDATE` (marking it Not sent), sends with a 1-hour TTL and high urgency, and marks it Sent once a push service accepts one. A crash after the claim means one missed notification, never a second one.
+- **Known gap: a failed publish for a reminder due before the next daily cron is missed.** A publish that fails when the reminder is saved (QStash down, for example) is logged and left for the cron. The cron runs once a day, so a reminder due before its next run gets no notification.
+- **Moving a Sent or Not sent reminder** to a time still ahead makes it pending again, with a new message. The week still locks those cards, so today that move comes from the agent or the API.
+- **Tests.** Fakes for QStash and push services (`scripts/fake-notify.mjs`); 50 API and unit tests; 8 browser tests. Clicking a notification to open Ask can't be tried in headless Chromium: check it by hand.
+
 ## After launch
 
 ### Step 8: drag motion and the phone grip

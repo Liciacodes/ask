@@ -11,6 +11,8 @@ const figtree = Figtree({
 export const metadata: Metadata = {
   title: "Ask",
   description: "A command bar assistant.",
+  // Added to an iPhone's Home Screen, Ask opens as an app of its own, which is what lets it show notifications.
+  appleWebApp: { capable: true, title: "Ask", statusBarStyle: "default" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
