@@ -7,7 +7,7 @@ const WEDNESDAY = new Date("2026-11-18T10:20:00+01:00")
 test.each([
   ["dentist next Friday at 9am", "Do you mean Friday 20 November or Friday 27 November?"],
   ["next fri at 9", "Do you mean Friday 20 November or Friday 27 November?"],
-  ["call mum next Monday at 9.30", "Do you mean Monday 23 November or Monday 30 November?"],
+  ["call dad next Monday at 9.30", "Do you mean Monday 23 November or Monday 30 November?"],
   ["Next THURSDAY gym", "Do you mean Thursday 19 November or Thursday 26 November?"],
   ["next wednesday standup", "Do you mean Wednesday 25 November or Wednesday 2 December?"],
 ])("“%s” leaves the week open: %s", (said, question) => {

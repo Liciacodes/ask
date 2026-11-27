@@ -75,11 +75,11 @@ test("a new reminder has nothing saved yet, so it has no link", async ({ page })
 })
 
 test("the AI's card gets the link once the reminder is saved, not while it waits for your OK", async ({ page }) => {
-  const preview = { action: "create", reminder: { title: "Call mum 📞", description: null, date: "2026-11-20", time: "18:00", category: "call" } } as const
-  const saved = reminder("Call mum 📞", "2026-11-20T17:00:00.000Z", { category: "call", created_at: "2026-11-18T09:20:00.000Z" })
-  await fakeAgent(page, turn(proposes("createReminder", { title: "Call mum 📞", date: "2026-11-20", time: "18:00", category: "call" }, preview)), turn(did("create", saved)))
+  const preview = { action: "create", reminder: { title: "Call Dad 📞", description: null, date: "2026-11-20", time: "18:00", category: "call" } } as const
+  const saved = reminder("Call Dad 📞", "2026-11-20T17:00:00.000Z", { category: "call", created_at: "2026-11-18T09:20:00.000Z" })
+  await fakeAgent(page, turn(proposes("createReminder", { title: "Call Dad 📞", date: "2026-11-20", time: "18:00", category: "call" }, preview)), turn(did("create", saved)))
   await goHome(page)
-  await ask(page, "remind me to call mum friday at 6")
+  await ask(page, "remind me to call dad friday at 6")
 
   await expect(card(page, "New reminder").getByRole("button", { name: "Save", exact: true })).toBeVisible()
   await expect(addToCalendar(conversation(page))).toHaveCount(0)
@@ -90,7 +90,7 @@ test("the AI's card gets the link once the reminder is saved, not while it waits
   const link = addToCalendar(card(page, "New reminder"))
   await expect(link).toBeVisible()
   await expect(link).toHaveAttribute("href", calendarLink(saved, origin(page)))
-  expect(await fieldsOf(link)).toMatchObject({ text: "Call mum 📞", dates: "20261120T170000Z/20261120T173000Z" })
+  expect(await fieldsOf(link)).toMatchObject({ text: "Call Dad 📞", dates: "20261120T170000Z/20261120T173000Z" })
   await expect(link).toHaveAttribute("target", "_blank")
   await expect(link).toHaveAttribute("rel", "noopener noreferrer")
 })

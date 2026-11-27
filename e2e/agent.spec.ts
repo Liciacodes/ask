@@ -17,9 +17,9 @@ const hints = (page: Page) => page.locator("[aria-hidden] kbd").locator("xpath=.
 const day = (page: Page, name: string) =>
   page.getByRole("list", { name: "Days this week" }).getByRole("listitem").filter({ has: page.getByRole("heading", { name }) })
 
-const callMum = { action: "create", reminder: { title: "Call mum", description: null, date: "2026-11-20", time: "18:00", category: "call" } } as const
-const callMumInput = { title: "Call mum", date: "2026-11-20", time: "18:00", category: "call" }
-const savedCallMum = reminder("Call mum", "2026-11-20T17:00:00.000Z", { created_at: "2026-11-18T09:20:00.000Z" })
+const callDad = { action: "create", reminder: { title: "Call Dad", description: null, date: "2026-11-20", time: "18:00", category: "call" } } as const
+const callDadInput = { title: "Call Dad", date: "2026-11-20", time: "18:00", category: "call" }
+const savedCallDad = reminder("Call Dad", "2026-11-20T17:00:00.000Z", { created_at: "2026-11-18T09:20:00.000Z" })
 
 async function ask(page: Page, question: string) {
   await openBar(page)
@@ -71,13 +71,13 @@ test("a command that matches stays first, and asking isn't offered", async ({ pa
 })
 
 test("an action waits for your OK on a preview card, and nothing is sent until you answer", async ({ page }) => {
-  const requests = await fakeAgent(page, turn(says("Here it is."), proposes("createReminder", callMumInput, callMum)))
+  const requests = await fakeAgent(page, turn(says("Here it is."), proposes("createReminder", callDadInput, callDad)))
   await goHome(page)
 
-  await ask(page, "remind me to call mum friday at 6")
+  await ask(page, "remind me to call dad friday at 6")
 
   const preview = card(page, "New reminder")
-  await expect(preview).toContainText("Call mum")
+  await expect(preview).toContainText("Call Dad")
   // On a soft grey card, with its category's dot and grey icon, as it will look in the week.
   await expect(preview).toHaveAttribute("data-category", "call")
   await expect(preview.locator("div").first()).toHaveCSS("background-color", await painted(page, "--soft"))
@@ -96,32 +96,32 @@ test("an action waits for your OK on a preview card, and nothing is sent until y
 })
 
 test("Enter on the card says yes: the reminder is saved, the bar says so in its own words, and the week shows it", async ({ page }) => {
-  const requests = await fakeAgent(page, turn(proposes("createReminder", callMumInput, callMum)), turn(did("create", savedCallMum)))
+  const requests = await fakeAgent(page, turn(proposes("createReminder", callDadInput, callDad)), turn(did("create", savedCallDad)))
   await goHome(page)
-  await ask(page, "remind me to call mum friday at 6")
+  await ask(page, "remind me to call dad friday at 6")
   await expect(card(page, "New reminder")).toBeVisible()
 
   await page.keyboard.press("Enter")
 
   await expect(card(page, "New reminder")).toContainText("Saved")
-  await expect(conversation(page).getByText("Saved: Call mum, Friday 20 Nov, 18:00")).toBeVisible()
+  await expect(conversation(page).getByText("Saved: Call Dad, Friday 20 Nov, 18:00")).toBeVisible()
   expect(requests).toHaveLength(2)
   const answered = requests[1].messages.at(-1)!.parts.find((part) => part.type === "tool-createReminder")
   expect(answered).toMatchObject({ state: "approval-responded", approval: { id: "approval-call-1", approved: true } })
 
   const friday = day(page, "Friday 20 November").getByRole("option")
   await expect(friday).toHaveCount(1)
-  await expect(friday).toContainText("Call mum")
+  await expect(friday).toContainText("Call Dad")
   await expect(friday).toHaveAttribute("data-newest", "")
-  await expect(status(page)).toHaveText("Saved Call mum for Fri 20 Nov, 18:00")
+  await expect(status(page)).toHaveText("Saved Call Dad for Fri 20 Nov, 18:00")
   await expect(bar(page)).toBeVisible()
   await expect(hints(page)).toHaveText(["↵send", "escback"])
 })
 
 test("Esc on the card says no: nothing is saved, the server hears it, and no words follow the card", async ({ page }) => {
-  const requests = await fakeAgent(page, turn(proposes("createReminder", callMumInput, callMum)), turn(declined()))
+  const requests = await fakeAgent(page, turn(proposes("createReminder", callDadInput, callDad)), turn(declined()))
   await goHome(page)
-  await ask(page, "remind me to call mum friday at 6")
+  await ask(page, "remind me to call dad friday at 6")
   await expect(card(page, "New reminder")).toBeVisible()
 
   await page.keyboard.press("Escape")
@@ -136,9 +136,9 @@ test("Esc on the card says no: nothing is saved, the server hears it, and no wor
 })
 
 test("the card's buttons answer it with a pointer too, and the cursor goes back to the follow-up", async ({ page }) => {
-  const requests = await fakeAgent(page, turn(proposes("createReminder", callMumInput, callMum)), turn(declined()))
+  const requests = await fakeAgent(page, turn(proposes("createReminder", callDadInput, callDad)), turn(declined()))
   await goHome(page)
-  await ask(page, "remind me to call mum friday at 6")
+  await ask(page, "remind me to call dad friday at 6")
 
   await card(page, "New reminder").getByRole("button", { name: "Don't save" }).click()
 
@@ -337,11 +337,11 @@ test("a test that forgets to fake /api/agent never reaches a server", async ({ p
 test("a reply the server asked again shows only its card: no examples, no words back in the field, and Enter still saves", async ({ page }) => {
   const requests = await fakeAgent(
     page,
-    turn(askedAgain("off-topic"), proposes("createReminder", callMumInput, callMum)),
-    turn(did("create", savedCallMum))
+    turn(askedAgain("off-topic"), proposes("createReminder", callDadInput, callDad)),
+    turn(did("create", savedCallDad))
   )
   await goHome(page)
-  await ask(page, "call mum friday at 6pm")
+  await ask(page, "call dad friday at 6pm")
 
   await expect(card(page, "New reminder")).toBeVisible()
   await expect(conversation(page).getByText("Try something like")).toHaveCount(0)
@@ -350,7 +350,7 @@ test("a reply the server asked again shows only its card: no examples, no words 
 
   await page.keyboard.press("Enter")
 
-  await expect(conversation(page).getByText("Saved: Call mum, Friday 20 Nov, 18:00")).toBeVisible()
+  await expect(conversation(page).getByText("Saved: Call Dad, Friday 20 Nov, 18:00")).toBeVisible()
   expect(requests).toHaveLength(2)
 })
 

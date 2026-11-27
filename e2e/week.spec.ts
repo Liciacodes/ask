@@ -45,13 +45,13 @@ test("each reminder sits in its own day, in time order, with its time and title"
   await goHome(page, [
     reminder("Dentist", "2026-11-18T08:00:00Z"),
     reminder("Gym", "2026-11-18T07:00:00Z"),
-    reminder("Call mum", "2026-11-20T17:30:00Z"),
+    reminder("Call Dad", "2026-11-20T17:30:00Z"),
     reminder("Just after midnight", "2026-11-15T23:30:00Z"),
   ])
 
   await expectCards(day(page, "Monday 16 November"), [["00:30", "Just after midnight"]])
   await expectCards(day(page, "Wednesday 18 November"), [["08:00", "Gym"], ["09:00", "Dentist"]])
-  await expectCards(day(page, "Friday 20 November"), [["18:30", "Call mum"]])
+  await expectCards(day(page, "Friday 20 November"), [["18:30", "Call Dad"]])
   await expectCards(day(page, "Sunday 22 November"), [])
 })
 
@@ -132,7 +132,7 @@ test("each card's name says its category, which its colour and icon show", async
 test("a sent reminder says Sent, and a failed one says Not sent", async ({ page }) => {
   await goHome(page, [
     reminder("Invoice", "2026-11-16T08:00:00Z", { status: "sent", sent_at: "2026-11-16T08:00:01Z" }),
-    reminder("Call mum", "2026-11-17T17:30:00Z", { status: "failed" }),
+    reminder("Call Dad", "2026-11-17T17:30:00Z", { status: "failed" }),
   ])
 
   await expect(day(page, "Monday 16 November").getByText("Sent", { exact: true })).toBeVisible()

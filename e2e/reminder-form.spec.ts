@@ -179,7 +179,7 @@ test("the category follows the title's keyword guess as you type, and is saved w
 
   await openForm(page)
   await expect(category(page)).toHaveText("Other")
-  await page.keyboard.type("Call mum")
+  await page.keyboard.type("Call Dad")
   await expect(category(page)).toHaveText("Call")
   await title(page).fill("Dentist")
   await expect(category(page)).toHaveText("Health")

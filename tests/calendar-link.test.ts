@@ -30,10 +30,10 @@ describe("calendarLink", () => {
   })
 
   test("emoji are encoded and come back whole", () => {
-    const link = calendarLink({ title: "Call mum 📞", due_at: DUE, description: "Say happy birthday 🎂" }, ORIGIN)
+    const link = calendarLink({ title: "Call Dad 📞", due_at: DUE, description: "Say happy birthday 🎂" }, ORIGIN)
 
     expect(link).toContain("%F0%9F%93%9E")
-    expect(fields(link).text).toBe("Call mum 📞")
+    expect(fields(link).text).toBe("Call Dad 📞")
     expect(fields(link).details).toBe("Say happy birthday 🎂\n\nAdded from Ask: https://ask.example")
   })
 

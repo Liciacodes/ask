@@ -77,9 +77,9 @@ describe("reading", () => {
 })
 
 describe("creating", () => {
-  const question = asking("Remind me to call mum on the 13th at 6pm")
+  const question = asking("Remind me to call dad on the 13th at 6pm")
   // A function, not a value: a scripted stream can only be read once.
-  const proposal = () => callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00", category: "call" })
+  const proposal = () => callsTool("createReminder", { title: "Call Dad", date: `${nextYear}-03-13`, time: "18:00", category: "call" })
 
   test("waits for your OK with a preview, and saves nothing yet", async () => {
     const model = fakeModel(proposal())
@@ -88,7 +88,7 @@ describe("creating", () => {
 
     expect(toolParts(reply).map((part) => part.state)).toEqual(["approval-requested"])
     expect(previews(reply)).toEqual([
-      { action: "create", reminder: { title: "Call mum", description: null, date: `${nextYear}-03-13`, time: "18:00", category: "call" } },
+      { action: "create", reminder: { title: "Call Dad", description: null, date: `${nextYear}-03-13`, time: "18:00", category: "call" } },
     ])
     expect(await db.reminder.count()).toBe(0)
     expect(model.doStreamCalls).toHaveLength(1)
@@ -100,7 +100,7 @@ describe("creating", () => {
     const { finished } = await approveThenRun(model, question)
 
     const saved = await db.reminder.findFirstOrThrow()
-    expect(saved).toMatchObject({ title: "Call mum", timezone: LAGOS, status: "pending", category: "call", userId: TEST_VISITOR })
+    expect(saved).toMatchObject({ title: "Call Dad", timezone: LAGOS, status: "pending", category: "call", userId: TEST_VISITOR })
     expect(saved.dueAt.toISOString()).toBe(`${nextYear}-03-13T17:00:00.000Z`)
     expect(toolParts(finished)[0]).toMatchObject({ state: "output-available", output: { done: "create" } })
   })
@@ -117,7 +117,7 @@ describe("creating", () => {
   })
 
   test("a time that has passed is refused before you see a preview, and the model is told why", async () => {
-    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: "2020-01-01", time: "18:00", category: "call" }), says("I can't do that."))
+    const model = fakeModel(callsTool("createReminder", { title: "Call Dad", date: "2020-01-01", time: "18:00", category: "call" }), says("I can't do that."))
 
     const reply = await run(model, [question])
 
@@ -139,7 +139,7 @@ describe("creating", () => {
 
   // The schema asks for a category, so the server never has to guess one for the agent.
   test("a call without a category is caught by the schema: no card, nothing saved, and the model is told", async () => {
-    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00" }), says("Which kind is it?"))
+    const model = fakeModel(callsTool("createReminder", { title: "Call Dad", date: `${nextYear}-03-13`, time: "18:00" }), says("Which kind is it?"))
 
     const reply = await run(model, [question])
 
@@ -757,11 +757,11 @@ describe("the agent route", () => {
   }
 
   test("the bar's own conversation goes through: it asks, you approve, and the reminder is saved", async () => {
-    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00", category: "call" }), says("Saved."))
+    const model = fakeModel(callsTool("createReminder", { title: "Call Dad", date: `${nextYear}-03-13`, time: "18:00", category: "call" }), says("Saved."))
     routeModel.current = model
     const { chat, sent, settled } = barChat()
 
-    await chat.sendMessage({ text: "Remind me to call mum on the 13th at 6pm" })
+    await chat.sendMessage({ text: "Remind me to call dad on the 13th at 6pm" })
     expect(chat.messages.at(-1)!.parts.find((part) => part.type === "tool-createReminder")).toMatchObject({ state: "approval-requested" })
     expect(await db.reminder.count()).toBe(0)
     await approveCard(chat)
@@ -773,7 +773,7 @@ describe("the agent route", () => {
     const reply = chat.messages.at(-1)!
     expect(reply.parts.find((part) => part.type === "tool-createReminder")).toMatchObject({
       state: "output-available",
-      output: { done: "create", reminder: { title: "Call mum", due_at: `${nextYear}-03-13T17:00:00.000Z`, category: "call" } },
+      output: { done: "create", reminder: { title: "Call Dad", due_at: `${nextYear}-03-13T17:00:00.000Z`, category: "call" } },
     })
   })
 
@@ -806,11 +806,11 @@ describe("the agent route", () => {
   })
 
   test.each([true, false])("after you answer a card (yes: %s), the model isn't called again, so nothing it writes reaches the bar", async (approved) => {
-    const model = fakeModel(callsTool("createReminder", { title: "Call mum", date: `${nextYear}-03-13`, time: "18:00", category: "call" }), says(`${leaked} Saved!`))
+    const model = fakeModel(callsTool("createReminder", { title: "Call Dad", date: `${nextYear}-03-13`, time: "18:00", category: "call" }), says(`${leaked} Saved!`))
     routeModel.current = model
     const { chat, streams, settled } = barChat()
 
-    await chat.sendMessage({ text: "Remind me to call mum on the 13th at 6pm" })
+    await chat.sendMessage({ text: "Remind me to call dad on the 13th at 6pm" })
     await approveCard(chat, approved)
     await settled(2)
 

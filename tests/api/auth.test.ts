@@ -44,7 +44,7 @@ const ownerOf = async (id: string) => (await db.reminder.findUniqueOrThrow({ whe
 
 describe("signing in with Google", () => {
   test("moves this browser's guest reminders to the account, and the session then reaches them from any browser", async () => {
-    const mine = await saveReminder({ title: "Call mum" })
+    const mine = await saveReminder({ title: "Call Dad" })
     const theirs = await saveReminder({ title: "Their own", userId: OTHER_VISITOR })
 
     const done = await signInWithGoogle()
@@ -60,7 +60,7 @@ describe("signing in with Google", () => {
 
     // Another browser, another visitor, but the same session: the reminder is reachable.
     const elsewhere = `${visitorCookie(THIRD_VISITOR)}; ${session}`
-    const changed = await PATCH(request("PATCH", `/api/reminders/${mine.id}`, { title: "Call mum back" }, { cookie: elsewhere }), context(mine.id))
+    const changed = await PATCH(request("PATCH", `/api/reminders/${mine.id}`, { title: "Call Dad back" }, { cookie: elsewhere }), context(mine.id))
     expect(changed.status).toBe(200)
     // And the guest who signed in no longer reaches it without the session.
     const asGuest = await PATCH(request("PATCH", `/api/reminders/${mine.id}`, { title: "Nope" }), context(mine.id))

@@ -57,10 +57,10 @@ describe("POST /api/reminders", () => {
   })
 
   test("keeps an optional description and trims spaces", async () => {
-    const response = await create({ ...valid, title: "  Call mum  ", description: " About Sunday " })
+    const response = await create({ ...valid, title: "  Call Dad  ", description: " About Sunday " })
 
     const body = await response.json()
-    expect(body.title).toBe("Call mum")
+    expect(body.title).toBe("Call Dad")
     expect(body.description).toBe("About Sunday")
   })
 
